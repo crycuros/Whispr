@@ -1,32 +1,50 @@
 const net = require('net');
+const crypto = require('crypto');
 const AMProto = require('./amproto');
 
 const PORT = 3000;
 const HOST = '127.0.0.1';
 
 const client = new net.Socket();
+let clientDH;
+let sharedSecret;
 
 client.connect(PORT, HOST, () => {
     console.log(`[Client] Connected to AM Proto Server at ${HOST}:${PORT}`);
 
-    // Build and send an AUTH packet
-    console.log(`[Client] Sending AUTH packet...`);
-    const authPacket = AMProto.buildPacket(AMProto.CMD_AUTH, "User_Jessie_123");
+    // Step 1: Initialize DH Key Exchange
+    console.log(`[Client] Generating Diffie-Hellman keys (this might take a second)...`);
     
-    // Log the raw binary before sending
-    console.log(`[Client] Raw binary to send:`, authPacket);
-    client.write(authPacket);
+    // We use a smaller prime (512 bit) here for faster generation in prototype,
+    // in real life this should be 2048 or more.
+    clientDH = crypto.createDiffieHellman(512); 
+    clientDH.generateKeys();
+    
+    const payload = {
+        prime: clientDH.getPrime('hex'),
+        generator: clientDH.getGenerator('hex'),
+        publicKey: clientDH.getPublicKey('hex')
+    };
+
+    console.log(`[Client] Sending DH_INIT to server...`);
+    const initPacket = AMProto.buildPacket(AMProto.CMD_DH_INIT, payload);
+    client.write(initPacket);
 });
 
 client.on('data', (data) => {
-    console.log(`[Client] Received raw bytes from server:`, data);
-    
     try {
         const packet = AMProto.parsePacket(data);
-        console.log(`[Client] Parsed Reply:`, packet);
         
-        if (packet.command === AMProto.CMD_PING) {
-            console.log(`[Client] Received PING with message: ${packet.payloadString}`);
+        if (packet.command === AMProto.CMD_DH_REPLY) {
+            console.log(`[Client] Received DH_REPLY from server.`);
+            const payload = JSON.parse(packet.payloadString);
+            
+            // Step 2: Compute shared secret using server's public key
+            const serverPublicKey = Buffer.from(payload.publicKey, 'hex');
+            sharedSecret = clientDH.computeSecret(serverPublicKey);
+            
+            console.log(`[Client] Computed Shared Secret (first 4 bytes): ${sharedSecret.slice(0, 4).toString('hex')}...`);
+            console.log(`[Client] Phase 2 DH Key Exchange SUCCESS!`);
             
             // Cleanly close connection after getting reply
             client.destroy();

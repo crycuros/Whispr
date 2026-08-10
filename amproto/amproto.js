@@ -8,6 +8,8 @@ class AMProto {
     static CMD_AUTH = 0x01;
     static CMD_SEND_MSG = 0x02;
     static CMD_PING = 0x03;
+    static CMD_DH_INIT = 0x04;
+    static CMD_DH_REPLY = 0x05;
 
     /**
      * Builds a binary packet for AM Proto
@@ -17,10 +19,18 @@ class AMProto {
      * [2-3] Payload Length (2 bytes, UInt16)
      * [4-7] Message ID (4 bytes, UInt32)
      */
-    static buildPacket(command, payloadString) {
+    static buildPacket(command, payload) {
         const version = 1;
         const msgId = Math.floor(Math.random() * 0xFFFFFFFF);
-        const payloadBuffer = Buffer.from(payloadString, 'utf-8');
+        
+        let payloadBuffer;
+        if (Buffer.isBuffer(payload)) {
+            payloadBuffer = payload;
+        } else if (typeof payload === 'object') {
+            payloadBuffer = Buffer.from(JSON.stringify(payload), 'utf-8');
+        } else {
+            payloadBuffer = Buffer.from(payload, 'utf-8');
+        }
         const payloadLength = payloadBuffer.length;
 
         // Allocate buffer: 8 bytes header + payload length
