@@ -119,6 +119,8 @@ button:disabled { background: #334155; color: #94a3b8; cursor: not-allowed; }
     font-size: 0.95rem;
     line-height: 1.4;
     animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: flex;
+    flex-direction: column;
 }
 .message.system {
     align-self: center;
@@ -182,9 +184,8 @@ button:disabled { background: #334155; color: #94a3b8; cursor: not-allowed; }
     font-size: 0.65rem;
     font-style: italic;
     color: rgba(255, 255, 255, 0.4);
-    margin-left: 8px;
-    float: right;
-    margin-top: 6px;
+    margin-top: 4px;
+    align-self: flex-end;
     letter-spacing: 0.5px;
 }
 .read-status.seen {
