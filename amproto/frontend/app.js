@@ -505,6 +505,8 @@ document.getElementById('btn-send').onclick = async () => {
     input.value = '';
     
     chat.messages.push({ text, type: 'sent', isRead: false });
+    await persistKeys(); // Save sent message to local storage
+    
     renderMessages(currentActiveChat);
     renderChatList();
     
