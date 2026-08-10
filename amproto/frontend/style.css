@@ -181,14 +181,14 @@ button:disabled { background: #334155; color: #94a3b8; cursor: not-allowed; }
     display: inline-block;
 }
 .read-status {
-    font-size: 0.65rem;
-    font-style: italic;
-    color: rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.3);
     margin-top: 4px;
     align-self: flex-end;
-    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    transition: all 0.3s ease;
 }
 .read-status.seen {
-    color: #10b981; /* Green color for heard */
-    text-shadow: 0 0 5px rgba(16, 185, 129, 0.5);
+    color: #ffffff; /* Turns white */
+    filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.5));
 }

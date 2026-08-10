@@ -215,11 +215,18 @@ function appendMessage(text, type) {
     contentSpan.innerText = text;
     div.appendChild(contentSpan);
     
+const whisperIconSVG = `
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+    <path d="M6 9 C 8 11, 8 13, 6 15" />
+    <path d="M11 5 C 15 9, 15 15, 11 19" />
+    <path d="M16 1 C 22 7, 22 17, 16 23" />
+</svg>`;
+
     // Add read status for sent messages
     if (type === 'sent') {
         const statusSpan = document.createElement('span');
         statusSpan.className = 'read-status';
-        statusSpan.innerText = 'whispered...';
+        statusSpan.innerHTML = whisperIconSVG;
         div.appendChild(statusSpan);
     }
     
@@ -260,10 +267,9 @@ function hideTypingIndicator() {
 }
 
 function markMessagesAsRead() {
-    // Change all 'whispered...' to 'heard'
+    // Change all icons to white
     const statuses = document.querySelectorAll('.read-status:not(.seen)');
     statuses.forEach(span => {
-        span.innerText = 'heard';
         span.classList.add('seen');
     });
 }
