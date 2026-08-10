@@ -192,6 +192,7 @@ ws.onmessage = async (event) => {
             const decryptedMsg = await decryptPayload(chat.sharedSecretKey, payload);
             
             chat.messages.push({ text: decryptedMsg, type: 'received', isRead: true });
+            await persistKeys();
             
             if (currentActiveChat === sender) {
                 const readPacket = buildPacket(CMD_READ, sender, myId, "");
@@ -210,6 +211,7 @@ ws.onmessage = async (event) => {
             chat.messages.forEach(m => {
                 if (m.type === 'sent') m.isRead = true;
             });
+            await persistKeys();
             if (currentActiveChat === sender) renderMessages(sender);
         }
     } catch (err) {
@@ -221,7 +223,7 @@ ws.onmessage = async (event) => {
 async function persistKeys() {
     const exportableKeys = {};
     for (const [peerId, chat] of chats.entries()) {
-        let exportable = { username: chat.username, isSecure: chat.isSecure };
+        let exportable = { username: chat.username, isSecure: chat.isSecure, messages: chat.messages };
         if (chat.dhKeyPair) {
             const priv = await crypto.subtle.exportKey("pkcs8", chat.dhKeyPair.privateKey);
             const pub = await crypto.subtle.exportKey("raw", chat.dhKeyPair.publicKey);
@@ -273,6 +275,7 @@ async function loadPersistedKeys() {
             
             chat.username = dataObj.username || `User ${peerId}`;
             chat.isSecure = dataObj.isSecure || false;
+            chat.messages = dataObj.messages || [];
             
             if (dataObj.dhKeyPair) {
                 const privKey = await crypto.subtle.importKey("pkcs8", new Uint8Array(dataObj.dhKeyPair.priv), { name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
