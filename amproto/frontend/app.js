@@ -206,14 +206,21 @@ function enableChat() {
 }
 
 function appendMessage(text, type) {
+    const wrapper = document.createElement('div');
+    wrapper.className = `message-wrapper ${type}`;
+
     const div = document.createElement('div');
-    div.className = `message ${type}`;
+    div.className = `message`; // type is on the wrapper now, but we keep styling via wrapper
+    if(type === 'system') div.classList.add('system');
+    else if (type === 'sent') div.classList.add('sent');
+    else if (type === 'received') div.classList.add('received');
     
-    // Create a container for text and read status
     const contentSpan = document.createElement('span');
     contentSpan.className = 'msg-content';
     contentSpan.innerText = text;
     div.appendChild(contentSpan);
+    
+    wrapper.appendChild(div);
     
 const whisperIconSVG = `
 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -222,12 +229,12 @@ const whisperIconSVG = `
     <path d="M16 1 C 22 7, 22 17, 16 23" />
 </svg>`;
 
-    // Add read status for sent messages
+    // Add read status for sent messages OUTSIDE the bubble
     if (type === 'sent') {
         const statusSpan = document.createElement('span');
         statusSpan.className = 'read-status';
         statusSpan.innerHTML = whisperIconSVG;
-        div.appendChild(statusSpan);
+        wrapper.appendChild(statusSpan);
     }
     
     const messagesContainer = document.getElementById('messages');
@@ -235,12 +242,12 @@ const whisperIconSVG = `
     
     // Insert before typing indicator if it exists
     if (indicator) {
-        messagesContainer.insertBefore(div, indicator);
+        messagesContainer.insertBefore(wrapper, indicator);
     } else {
-        messagesContainer.appendChild(div);
+        messagesContainer.appendChild(wrapper);
     }
     
-    div.scrollIntoView({ behavior: 'smooth' });
+    wrapper.scrollIntoView({ behavior: 'smooth' });
 }
 
 let typingTimeout = null;
