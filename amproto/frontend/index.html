@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="app-container">
+    <div class="app-container" id="app-container" style="display: none; opacity: 0;">
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
@@ -66,6 +66,25 @@
             <p>Select a chat or start a new one.</p>
         </main>
     </div>
+
+    <!-- Login/Register Modal -->
+    <div class="auth-modal" id="auth-modal">
+        <div class="auth-box">
+            <h2>Welcome to Whispr</h2>
+            <p class="auth-subtitle">Secure, Zero-Knowledge Messaging</p>
+            
+            <div id="auth-error" class="auth-error" style="display: none;"></div>
+            
+            <input type="text" id="auth-username" placeholder="Username" autocomplete="off">
+            <input type="password" id="auth-password" placeholder="Password" autocomplete="off">
+            
+            <div class="auth-buttons">
+                <button id="btn-login" class="btn-primary">Log In</button>
+                <button id="btn-register" class="btn-secondary">Create Account</button>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>

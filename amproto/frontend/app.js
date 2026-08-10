@@ -1,17 +1,24 @@
 const OBFUSCATION_KEY = 0xAB;
 const CMD_AUTH = 0x01;
+const CMD_LOGIN = 0x02;
+const CMD_LOGIN_OK = 0x03;
 const CMD_DH_INIT = 0x04;
 const CMD_DH_REPLY = 0x05;
 const CMD_ENC_MSG = 0x06;
+const CMD_REGISTER = 0x07;
+const CMD_REGISTER_OK = 0x08;
 const CMD_TYPING = 0x09;
 const CMD_READ = 0x0A;
+const CMD_SYNC = 0x0B;
+const CMD_ERROR = 0x0C;
 
-const myId = Math.floor(Math.random() * 9000) + 1000;
-document.getElementById('my-id').innerText = myId;
+let myId = null;
+let myUsername = null;
+let myPasswordHash = null; // Just SHA-256 for local key derivation
 
 // State Management
 const chats = new Map(); // peerId -> Chat Object
-let currentActiveChat = null; // currently focused peerId
+let currentActiveChat = null; 
 
 // Theme Toggle
 const themeToggle = document.getElementById('theme-toggle');
@@ -39,9 +46,45 @@ const ws = new WebSocket(`ws://${window.location.host}`);
 ws.binaryType = 'arraybuffer';
 
 ws.onopen = () => {
-    console.log("Connected to Relay");
-    const authPacket = buildPacket(CMD_AUTH, 0, myId.toString());
-    ws.send(obfuscate(authPacket));
+    console.log("Connected to Relay Server");
+};
+
+function showError(msg) {
+    const errDiv = document.getElementById('auth-error');
+    errDiv.innerText = msg;
+    errDiv.style.display = 'block';
+    setTimeout(() => { errDiv.style.display = 'none'; }, 3000);
+}
+
+document.getElementById('btn-login').onclick = async () => {
+    const user = document.getElementById('auth-username').value.trim();
+    const pass = document.getElementById('auth-password').value.trim();
+    if (!user || !pass) return showError("Please enter credentials");
+    
+    // Simple hash for local key wrapping (not true bcrypt for prototype)
+    const encoder = new TextEncoder();
+    const data = encoder.encode(pass);
+    const hash = await crypto.subtle.digest('SHA-256', data);
+    myPasswordHash = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    const payload = JSON.stringify({ username: user, password: myPasswordHash });
+    const packet = buildPacket(CMD_LOGIN, 0, 0, payload);
+    ws.send(obfuscate(packet));
+};
+
+document.getElementById('btn-register').onclick = async () => {
+    const user = document.getElementById('auth-username').value.trim();
+    const pass = document.getElementById('auth-password').value.trim();
+    if (!user || !pass) return showError("Please enter credentials");
+    
+    const encoder = new TextEncoder();
+    const data = encoder.encode(pass);
+    const hash = await crypto.subtle.digest('SHA-256', data);
+    myPasswordHash = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    const payload = JSON.stringify({ username: user, password: myPasswordHash });
+    const packet = buildPacket(CMD_REGISTER, 0, 0, payload);
+    ws.send(obfuscate(packet));
 };
 
 ws.onmessage = async (event) => {
@@ -50,27 +93,51 @@ ws.onmessage = async (event) => {
     const packet = parsePacket(cleanData);
     
     const sender = packet.senderId;
-    if (!sender && packet.command !== CMD_AUTH) return;
 
     try {
-        if (packet.command === CMD_DH_INIT) {
+        if (packet.command === CMD_REGISTER_OK) {
+            showError("Registration successful! Please log in.");
+            document.getElementById('auth-error').style.color = '#10b981';
+            document.getElementById('auth-error').style.background = 'rgba(16,185,129,0.1)';
+        }
+        else if (packet.command === CMD_ERROR) {
+            showError(packet.payloadString);
+        }
+        else if (packet.command === CMD_LOGIN_OK) {
+            const data = JSON.parse(packet.payloadString);
+            myId = data.userId;
+            myUsername = data.username;
+            
+            document.getElementById('my-id').innerText = `${myUsername} (${myId})`;
+            
+            // Hide Auth, Show App
+            document.getElementById('auth-modal').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('auth-modal').style.display = 'none';
+                document.getElementById('app-container').style.display = 'flex';
+                setTimeout(() => { document.getElementById('app-container').style.opacity = '1'; }, 50);
+            }, 500);
+            
+            await loadPersistedKeys();
+        }
+        else if (packet.command === CMD_DH_INIT) {
             let chat = getOrCreateChat(sender);
             
             const payload = JSON.parse(packet.payloadString);
             const peerPublicKeyData = new Uint8Array(payload.publicKey);
             
-            // Generate our ECDH keys
-            chat.dhKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
+            if (!chat.dhKeyPair) {
+                chat.dhKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
+                await persistKeys();
+            }
             const myPublicKeyBuffer = await crypto.subtle.exportKey("raw", chat.dhKeyPair.publicKey);
             
-            // Import peer's key
             const peerKey = await crypto.subtle.importKey("raw", peerPublicKeyData, { name: "ECDH", namedCurve: "P-256" }, true, []);
             chat.sharedSecretKey = await deriveSharedSecret(chat.dhKeyPair, peerKey);
             chat.isSecure = true;
             
-            // Send Reply
             const replyPayload = { publicKey: Array.from(new Uint8Array(myPublicKeyBuffer)) };
-            const replyPacket = buildPacket(CMD_DH_REPLY, sender, JSON.stringify(replyPayload));
+            const replyPacket = buildPacket(CMD_DH_REPLY, sender, myId, JSON.stringify(replyPayload));
             ws.send(obfuscate(replyPacket));
             
             renderChatList();
@@ -90,7 +157,7 @@ ws.onmessage = async (event) => {
         }
         else if (packet.command === CMD_ENC_MSG) {
             let chat = getOrCreateChat(sender);
-            if (!chat.sharedSecretKey) return; // Ignore if not secure
+            if (!chat.sharedSecretKey) return; 
             
             const payload = JSON.parse(packet.payloadString);
             const decryptedMsg = await decryptPayload(chat.sharedSecretKey, payload);
@@ -98,10 +165,9 @@ ws.onmessage = async (event) => {
             chat.messages.push({ text: decryptedMsg, type: 'received', isRead: true });
             
             if (currentActiveChat === sender) {
-                // Instantly send read receipt if we are looking at it
-                const readPacket = buildPacket(CMD_READ, sender, "");
+                const readPacket = buildPacket(CMD_READ, sender, myId, "");
                 ws.send(obfuscate(readPacket));
-                renderMessages(sender); // re-render to show new msg
+                renderMessages(sender);
             } else {
                 chat.unreadCount++;
                 renderChatList();
@@ -112,7 +178,6 @@ ws.onmessage = async (event) => {
         }
         else if (packet.command === CMD_READ) {
             let chat = getOrCreateChat(sender);
-            // Mark all sent messages as read
             chat.messages.forEach(m => {
                 if (m.type === 'sent') m.isRead = true;
             });
@@ -122,6 +187,66 @@ ws.onmessage = async (event) => {
         console.error("Protocol Error:", err);
     }
 };
+
+// --- Persistent Key Management ---
+async function persistKeys() {
+    const exportableKeys = {};
+    for (const [peerId, chat] of chats.entries()) {
+        if (chat.dhKeyPair) {
+            const priv = await crypto.subtle.exportKey("pkcs8", chat.dhKeyPair.privateKey);
+            const pub = await crypto.subtle.exportKey("raw", chat.dhKeyPair.publicKey);
+            exportableKeys[peerId] = {
+                priv: Array.from(new Uint8Array(priv)),
+                pub: Array.from(new Uint8Array(pub))
+            };
+        }
+    }
+    // Using password hash as AES key to encrypt the local storage keys for security
+    const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(myPasswordHash), {name: "PBKDF2"}, false, ["deriveBits", "deriveKey"]);
+    const wrappingKey = await crypto.subtle.deriveKey(
+        { "name": "PBKDF2", salt: new Uint8Array(16), iterations: 1000, hash: "SHA-256" },
+        keyMaterial, { "name": "AES-GCM", "length": 256 }, false, [ "encrypt", "decrypt" ]
+    );
+    
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encryptedStore = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, wrappingKey, new TextEncoder().encode(JSON.stringify(exportableKeys)));
+    
+    localStorage.setItem(`whispr_keys_${myUsername}`, JSON.stringify({
+        iv: Array.from(iv),
+        data: Array.from(new Uint8Array(encryptedStore))
+    }));
+}
+
+async function loadPersistedKeys() {
+    const stored = localStorage.getItem(`whispr_keys_${myUsername}`);
+    if (!stored) return;
+    
+    try {
+        const { iv, data } = JSON.parse(stored);
+        const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(myPasswordHash), {name: "PBKDF2"}, false, ["deriveBits", "deriveKey"]);
+        const wrappingKey = await crypto.subtle.deriveKey(
+            { "name": "PBKDF2", salt: new Uint8Array(16), iterations: 1000, hash: "SHA-256" },
+            keyMaterial, { "name": "AES-GCM", "length": 256 }, false, [ "encrypt", "decrypt" ]
+        );
+        
+        const decryptedStore = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(iv) }, wrappingKey, new Uint8Array(data));
+        const exportableKeys = JSON.parse(new TextDecoder().decode(decryptedStore));
+        
+        for (const [peerIdStr, keys] of Object.entries(exportableKeys)) {
+            const peerId = parseInt(peerIdStr);
+            const chat = getOrCreateChat(peerId);
+            
+            const privKey = await crypto.subtle.importKey("pkcs8", new Uint8Array(keys.priv), { name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
+            const pubKey = await crypto.subtle.importKey("raw", new Uint8Array(keys.pub), { name: "ECDH", namedCurve: "P-256" }, true, []);
+            
+            chat.dhKeyPair = { privateKey: privKey, publicKey: pubKey };
+        }
+        console.log("Loaded persisted keys.");
+        renderChatList();
+    } catch (err) {
+        console.error("Failed to load keys:", err);
+    }
+}
 
 // --- WebCrypto ---
 async function deriveSharedSecret(keyPair, peerPublicKey) {
@@ -147,7 +272,7 @@ async function decryptPayload(secretKey, payload) {
 }
 
 // --- AM Proto ---
-function buildPacket(command, target, payloadString) {
+function buildPacket(command, target, sender, payloadString) {
     const payloadBuffer = new TextEncoder().encode(payloadString);
     const payloadLength = payloadBuffer.length;
     const buffer = new ArrayBuffer(16 + payloadLength);
@@ -159,7 +284,7 @@ function buildPacket(command, target, payloadString) {
     view.setUint16(2, payloadLength, false);
     view.setUint32(4, Math.floor(Math.random() * 0xFFFFFFFF), false);
     view.setUint32(8, target, false);
-    view.setUint32(12, myId, false);
+    view.setUint32(12, sender, false);
     
     u8.set(payloadBuffer, 16);
     return u8;
@@ -206,11 +331,12 @@ document.getElementById('btn-new-chat').onclick = async () => {
     openChat(peerId);
     
     if (!chat.isSecure && !chat.dhKeyPair) {
-        // Init E2EE
         document.getElementById('crypto-status').innerText = 'Initiating E2EE...';
         chat.dhKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
+        await persistKeys();
+        
         const myPub = await crypto.subtle.exportKey("raw", chat.dhKeyPair.publicKey);
-        const packet = buildPacket(CMD_DH_INIT, peerId, JSON.stringify({ publicKey: Array.from(new Uint8Array(myPub)) }));
+        const packet = buildPacket(CMD_DH_INIT, peerId, myId, JSON.stringify({ publicKey: Array.from(new Uint8Array(myPub)) }));
         ws.send(obfuscate(packet));
     }
 };
@@ -247,13 +373,12 @@ function openChat(peerId) {
     document.getElementById('chat-title').innerText = `Peer ${peerId}`;
     
     if (chat.unreadCount > 0) {
-        // Send Read Receipts for unread messages!
-        const readPacket = buildPacket(CMD_READ, peerId, "");
+        const readPacket = buildPacket(CMD_READ, peerId, myId, "");
         ws.send(obfuscate(readPacket));
         chat.unreadCount = 0;
     }
     
-    renderChatList(); // update active class & clear badge
+    renderChatList(); 
     renderMessages(peerId);
     
     const input = document.getElementById('msg-input');
@@ -286,7 +411,10 @@ function renderMessages(peerId) {
         wrapper.className = `message-wrapper ${msg.type}`;
 
         const div = document.createElement('div');
-        div.className = `message ${msg.type}`;
+        div.className = `message`; 
+        if(msg.type === 'system') div.classList.add('system');
+        else if (msg.type === 'sent') div.classList.add('sent');
+        else if (msg.type === 'received') div.classList.add('received');
         
         const contentSpan = document.createElement('span');
         contentSpan.className = 'msg-content';
@@ -308,7 +436,6 @@ function renderMessages(peerId) {
     container.scrollTop = container.scrollHeight;
 }
 
-// Typing Indicator
 let typingTimeout = null;
 function showTypingIndicator() {
     let indicator = document.getElementById('typing-indicator');
@@ -339,14 +466,12 @@ document.getElementById('btn-send').onclick = async () => {
     
     input.value = '';
     
-    // Add to state and render immediately
     chat.messages.push({ text, type: 'sent', isRead: false });
     renderMessages(currentActiveChat);
     renderChatList();
     
-    // Encrypt and send
     const encryptedPayload = await encryptPayload(chat.sharedSecretKey, text);
-    const encPacket = buildPacket(CMD_ENC_MSG, currentActiveChat, JSON.stringify(encryptedPayload));
+    const encPacket = buildPacket(CMD_ENC_MSG, currentActiveChat, myId, JSON.stringify(encryptedPayload));
     ws.send(obfuscate(encPacket));
 };
 
@@ -363,7 +488,7 @@ document.getElementById('msg-input').addEventListener('input', () => {
     const now = Date.now();
     if (now - lastTypingSent > 500) {
         lastTypingSent = now;
-        const typingPacket = buildPacket(CMD_TYPING, currentActiveChat, "");
+        const typingPacket = buildPacket(CMD_TYPING, currentActiveChat, myId, "");
         ws.send(obfuscate(typingPacket));
     }
 });

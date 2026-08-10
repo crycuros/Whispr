@@ -6,11 +6,17 @@ const crypto = require('crypto');
 
 class AMProto {
     static CMD_AUTH = 0x01;
+    static CMD_LOGIN = 0x02;
+    static CMD_LOGIN_OK = 0x03;
     static CMD_DH_INIT = 0x04;
     static CMD_DH_REPLY = 0x05;
     static CMD_ENC_MSG = 0x06;
+    static CMD_REGISTER = 0x07;
+    static CMD_REGISTER_OK = 0x08;
     static CMD_TYPING = 0x09;
     static CMD_READ = 0x0A;
+    static CMD_SYNC = 0x0B;
+    static CMD_ERROR = 0x0C;
     
     // Obfuscation Mask (Simple XOR to hide the header from DPI)
     // In production, this would be a dynamic AES-CTR stream like MTProto FakeTLS.
@@ -114,4 +120,9 @@ class AMProto {
         return decrypted;
     }
 }
-module.exports = AMProto;
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = AMProto;
+}
+if (typeof window !== 'undefined') {
+    window.AMProto = AMProto;
+}
