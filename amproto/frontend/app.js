@@ -31,7 +31,7 @@ ws.onmessage = async (event) => {
 
     try {
         if (packet.command === CMD_DH_INIT) {
-            targetId = packet.targetId; // They contacted us
+            targetId = packet.senderId; // FIXED: Set target to the sender's ID, not our own!
             updateCryptoStatus(`Received handshake from ${targetId}...`, false);
             
             const payload = JSON.parse(packet.payloadString);
@@ -182,7 +182,12 @@ function enableChat() {
     updateCryptoStatus(`E2EE Secured with ${targetId}`, true);
     document.getElementById('msg-input').disabled = false;
     document.getElementById('btn-send').disabled = false;
-    appendMessage(`Secure E2E tunnel established with ID: ${targetId}`, 'system');
+    
+    // Check if we already printed the success message to prevent spam
+    if (!window.chatEnabled) {
+        appendMessage(`Secure E2E tunnel established with ID: ${targetId}`, 'system');
+        window.chatEnabled = true;
+    }
 }
 
 function appendMessage(text, type) {
