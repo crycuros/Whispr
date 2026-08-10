@@ -14,7 +14,11 @@
             <div class="sidebar-header">
                 <h2>Whispr</h2>
                 <div class="header-right">
-                    <button id="theme-toggle" class="theme-toggle" title="Toggle Light/Dark Mode">☀️</button>
+                    <button id="theme-toggle" class="theme-toggle" title="Toggle Light/Dark Mode">
+                        <svg id="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        </svg>
+                    </button>
                     <span class="my-id-badge">ID: <span id="my-id">...</span></span>
                     <span class="status-dot"></span>
                 </div>
@@ -55,7 +59,9 @@
         
         <!-- Empty State (When no chat is selected) -->
         <main class="chat-area empty-state" id="empty-state">
-            <div class="empty-icon">🤫</div>
+            <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
             <h3>Welcome to Whispr</h3>
             <p>Select a chat or start a new one.</p>
         </main>

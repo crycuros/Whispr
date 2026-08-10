@@ -1,5 +1,25 @@
 :root {
-    /* Dark Theme (Default) */
+    /* Light Theme (Default) */
+    --bg-gradient-start: #f8fafc;
+    --bg-gradient-end: #e2e8f0;
+    --text-primary: #0f172a;
+    --text-muted: #64748b;
+    --app-bg: rgba(255, 255, 255, 0.7);
+    --border-color: rgba(0, 0, 0, 0.1);
+    --sidebar-bg: rgba(255, 255, 255, 0.5);
+    --input-bg: #ffffff;
+    --primary-color: #4f46e5;
+    --primary-hover: #4338ca;
+    --system-msg-bg: rgba(0, 0, 0, 0.05);
+    --received-msg-bg: rgba(0, 0, 0, 0.05);
+    --chat-hover: rgba(0, 0, 0, 0.03);
+    --read-receipt-color: rgba(255, 255, 255, 0.5);
+    --read-receipt-seen: #ffffff; 
+    --shadow-color: rgba(0, 0, 0, 0.1);
+}
+
+body.dark-theme {
+    /* Dark Theme */
     --bg-gradient-start: #0f172a;
     --bg-gradient-end: #1e1b4b;
     --text-primary: #f1f5f9;
@@ -16,26 +36,6 @@
     --read-receipt-color: rgba(255, 255, 255, 0.3);
     --read-receipt-seen: #ffffff;
     --shadow-color: rgba(0, 0, 0, 0.5);
-}
-
-body.light-theme {
-    /* Light Theme */
-    --bg-gradient-start: #f8fafc;
-    --bg-gradient-end: #e2e8f0;
-    --text-primary: #0f172a;
-    --text-muted: #64748b;
-    --app-bg: rgba(255, 255, 255, 0.7);
-    --border-color: rgba(0, 0, 0, 0.1);
-    --sidebar-bg: rgba(255, 255, 255, 0.5);
-    --input-bg: #ffffff;
-    --primary-color: #4f46e5;
-    --primary-hover: #4338ca;
-    --system-msg-bg: rgba(0, 0, 0, 0.05);
-    --received-msg-bg: rgba(0, 0, 0, 0.05);
-    --chat-hover: rgba(0, 0, 0, 0.03);
-    --read-receipt-color: rgba(255, 255, 255, 0.5); /* sent messages still have primary bg, so receipts on sent messages stay white-ish */
-    --read-receipt-seen: #ffffff; 
-    --shadow-color: rgba(0, 0, 0, 0.1);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -270,7 +270,7 @@ body {
     color: var(--text-muted);
     text-align: center;
 }
-.empty-icon { font-size: 4rem; margin-bottom: 20px; opacity: 0.5; }
+.empty-icon { width: 64px; height: 64px; margin-bottom: 20px; opacity: 0.5; color: var(--text-muted); }
 .empty-state h3 { color: var(--text-primary); margin-bottom: 8px; font-weight: 500; }
 
 @keyframes popIn {
