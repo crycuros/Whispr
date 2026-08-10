@@ -5,6 +5,7 @@ const CMD_DH_INIT = 0x04;
 const CMD_DH_REPLY = 0x05;
 const CMD_ENC_MSG = 0x06;
 const CMD_TYPING = 0x09;
+const CMD_READ = 0x0A;
 
 // Random user ID between 1000 and 9999
 const myId = Math.floor(Math.random() * 9000) + 1000;
@@ -74,9 +75,18 @@ ws.onmessage = async (event) => {
             const decryptedMsg = await decryptPayload(payload);
             hideTypingIndicator(); // Hide instantly when message arrives
             appendMessage(decryptedMsg, 'received');
+            
+            // Send Read Receipt back!
+            if (targetId) {
+                const readPacket = buildPacket(CMD_READ, targetId, "");
+                ws.send(obfuscate(readPacket));
+            }
         }
         else if (packet.command === CMD_TYPING) {
             showTypingIndicator();
+        }
+        else if (packet.command === CMD_READ) {
+            markMessagesAsRead();
         }
     } catch (err) {
         console.error("Protocol Error:", err);
@@ -198,7 +208,20 @@ function enableChat() {
 function appendMessage(text, type) {
     const div = document.createElement('div');
     div.className = `message ${type}`;
-    div.innerText = text;
+    
+    // Create a container for text and read status
+    const contentSpan = document.createElement('span');
+    contentSpan.className = 'msg-content';
+    contentSpan.innerText = text;
+    div.appendChild(contentSpan);
+    
+    // Add read status for sent messages (Single Checkmark initially)
+    if (type === 'sent') {
+        const statusSpan = document.createElement('span');
+        statusSpan.className = 'read-status';
+        statusSpan.innerText = '✓';
+        div.appendChild(statusSpan);
+    }
     
     const messagesContainer = document.getElementById('messages');
     const indicator = document.getElementById('typing-indicator');
@@ -234,6 +257,15 @@ function hideTypingIndicator() {
         indicator.style.display = 'none';
         clearTimeout(typingTimeout);
     }
+}
+
+function markMessagesAsRead() {
+    // Change all single checks to blue double checks
+    const statuses = document.querySelectorAll('.read-status:not(.seen)');
+    statuses.forEach(span => {
+        span.innerText = '✓✓';
+        span.classList.add('seen');
+    });
 }
 
 document.getElementById('btn-send').onclick = async () => {
