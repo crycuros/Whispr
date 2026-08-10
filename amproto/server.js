@@ -1,34 +1,62 @@
-const net = require('net');
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const WebSocket = require('ws');
 const AMProto = require('./amproto');
 
 const PORT = 3000;
-const clients = new Map(); // Map of clientID -> socket
+const clients = new Map(); // Map of clientID -> ws connection
 
-const server = net.createServer((socket) => {
-    console.log(`\n[Server] New connection from ${socket.remoteAddress}:${socket.remotePort}`);
+// 1. Static File Server for our UI
+const server = http.createServer((req, res) => {
+    let filePath = path.join(__dirname, 'frontend', req.url === '/' ? 'index.html' : req.url);
+    const extname = path.extname(filePath);
+    let contentType = 'text/html';
+    
+    switch (extname) {
+        case '.js': contentType = 'text/javascript'; break;
+        case '.css': contentType = 'text/css'; break;
+    }
+
+    fs.readFile(filePath, (err, content) => {
+        if (err) {
+            res.writeHead(404);
+            res.end('File not found');
+        } else {
+            res.writeHead(200, { 'Content-Type': contentType });
+            res.end(content, 'utf-8');
+        }
+    });
+});
+
+// 2. AM Proto 2.0 WebSocket Relay
+const wss = new WebSocket.Server({ server });
+
+wss.on('connection', (ws) => {
+    console.log(`\n[Server] New WebSocket connection`);
     let myId = null;
 
-    socket.on('data', (rawData) => {
+    ws.on('message', (rawData) => {
         try {
-            // Anti-DPI: Deobfuscate traffic to read the routing header
+            // In Node.js 'ws' package, binary data arrives as a Buffer
             const cleanData = AMProto.deobfuscate(rawData);
             const packet = AMProto.parsePacket(cleanData);
             
             if (packet.command === AMProto.CMD_AUTH) {
-                // Client registering itself
                 myId = parseInt(packet.payloadString);
-                clients.set(myId, socket);
-                console.log(`[Server] Registered Client ID: ${myId}`);
+                clients.set(myId, ws);
+                console.log(`[Server] Registered Web Client ID: ${myId}`);
             }
             else {
-                // E2EE Zero-Knowledge Relay
                 const targetId = packet.targetId;
                 if (clients.has(targetId)) {
-                    console.log(`[Server] Relaying packet from ${myId} to ${targetId} (Zero Knowledge)`);
-                    const targetSocket = clients.get(targetId);
+                    console.log(`[Server] Relaying WS packet from ${myId} to ${targetId} (Zero Knowledge)`);
+                    const targetWs = clients.get(targetId);
                     
-                    // Note: We route the OBFUSCATED rawData directly to avoid tampering
-                    targetSocket.write(rawData);
+                    if (targetWs.readyState === WebSocket.OPEN) {
+                        // Forward the raw, obfuscated packet!
+                        targetWs.send(rawData);
+                    }
                 } else {
                     console.log(`[Server] Target ${targetId} not found.`);
                 }
@@ -38,18 +66,14 @@ const server = net.createServer((socket) => {
         }
     });
 
-    socket.on('end', () => {
+    ws.on('close', () => {
         if (myId) {
             clients.delete(myId);
-            console.log(`[Server] Client ${myId} disconnected`);
+            console.log(`[Server] Web Client ${myId} disconnected`);
         }
-    });
-
-    socket.on('error', (err) => {
-        console.error(`[Server] Socket error:`, err.message);
     });
 });
 
 server.listen(PORT, () => {
-    console.log(`[Server] AM Proto 2.0 ZERO-KNOWLEDGE RELAY listening on port ${PORT}`);
+    console.log(`[Server] Whispr Web App running on http://localhost:${PORT}`);
 });

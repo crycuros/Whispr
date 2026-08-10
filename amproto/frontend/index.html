@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whispr E2EE Chat</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>Whispr</h2>
+                <span class="status-dot"></span>
+            </div>
+            <div class="connection-panel">
+                <p>Your ID: <strong id="my-id">...</strong></p>
+                <div class="input-group">
+                    <input type="number" id="target-id" placeholder="Connect to ID...">
+                    <button id="btn-connect">Connect</button>
+                </div>
+                <p id="crypto-status" class="status-text text-muted">Waiting for connection...</p>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-area">
+            <div class="chat-header">
+                <h3 id="chat-title">E2EE Chat</h3>
+                <span class="badge" id="e2e-badge" style="opacity: 0.5;">Not Encrypted</span>
+            </div>
+            <div class="messages-container" id="messages">
+                <!-- Messages will appear here -->
+                <div class="message system">Welcome to Whispr! Enter a peer's ID to initiate End-to-End Encryption.</div>
+            </div>
+            <div class="input-area">
+                <input type="text" id="msg-input" placeholder="Type a secret message..." disabled autocomplete="off">
+                <button id="btn-send" disabled>Send</button>
+            </div>
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

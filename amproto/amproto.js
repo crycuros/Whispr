@@ -16,14 +16,15 @@ class AMProto {
 
     /**
      * Builds a binary packet for AM Proto
-     * Header (12 bytes):
+     * Header (16 bytes):
      * [0] Version (1 byte)
      * [1] Command (1 byte)
      * [2-3] Payload Length (2 bytes, UInt16)
      * [4-7] Message ID (4 bytes, UInt32)
-     * [8-11] Target Client ID (4 bytes, UInt32) - Used for server routing
+     * [8-11] Target Client ID (4 bytes, UInt32)
+     * [12-15] Sender Client ID (4 bytes, UInt32)
      */
-    static buildPacket(command, targetId, payload) {
+    static buildPacket(command, targetId, senderId, payload) {
         const version = 2; // Upgraded to v2
         const msgId = Math.floor(Math.random() * 0xFFFFFFFF);
         
@@ -37,16 +38,17 @@ class AMProto {
         }
         const payloadLength = payloadBuffer.length;
 
-        // Allocate buffer: 12 bytes header + payload length
-        const packet = Buffer.alloc(12 + payloadLength);
+        // Allocate buffer: 16 bytes header + payload length
+        const packet = Buffer.alloc(16 + payloadLength);
 
         packet.writeUInt8(version, 0);
         packet.writeUInt8(command, 1);
         packet.writeUInt16BE(payloadLength, 2);
         packet.writeUInt32BE(msgId, 4);
-        packet.writeUInt32BE(targetId, 8); // New routing info
+        packet.writeUInt32BE(targetId, 8); 
+        packet.writeUInt32BE(senderId, 12); 
 
-        payloadBuffer.copy(packet, 12);
+        payloadBuffer.copy(packet, 16);
         return packet;
     }
 
@@ -54,7 +56,7 @@ class AMProto {
      * Parses an incoming binary packet
      */
     static parsePacket(buffer) {
-        if (buffer.length < 12) {
+        if (buffer.length < 16) {
             throw new Error("Packet too small to be valid AM Proto 2.0");
         }
 
@@ -63,11 +65,12 @@ class AMProto {
         const payloadLength = buffer.readUInt16BE(2);
         const msgId = buffer.readUInt32BE(4);
         const targetId = buffer.readUInt32BE(8);
+        const senderId = buffer.readUInt32BE(12);
 
-        const payloadBuffer = buffer.slice(12, 12 + payloadLength);
+        const payloadBuffer = buffer.slice(16, 16 + payloadLength);
         const payloadString = payloadBuffer.toString('utf-8');
 
-        return { version, command, payloadLength, msgId, targetId, payloadString, rawPayload: payloadBuffer };
+        return { version, command, payloadLength, msgId, targetId, senderId, payloadString, rawPayload: payloadBuffer };
     }
 
     /**
