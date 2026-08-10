@@ -60,6 +60,11 @@ function showError(msg) {
 }
 
 document.getElementById('btn-login').onclick = async () => {
+    if (ws.readyState !== WebSocket.OPEN) {
+        alert("Connecting to server... Please try again in a second.");
+        return;
+    }
+    
     const user = document.getElementById('auth-username').value.trim();
     const pass = document.getElementById('auth-password').value.trim();
     if (!user || !pass) return showError("Please enter credentials");
