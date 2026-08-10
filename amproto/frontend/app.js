@@ -13,6 +13,19 @@ document.getElementById('my-id').innerText = myId;
 const chats = new Map(); // peerId -> Chat Object
 let currentActiveChat = null; // currently focused peerId
 
+// Theme Toggle
+const themeToggle = document.getElementById('theme-toggle');
+if (localStorage.getItem('theme') === 'light') {
+    document.body.classList.add('light-theme');
+    themeToggle.innerText = '🌙';
+}
+themeToggle.onclick = () => {
+    document.body.classList.toggle('light-theme');
+    const isLight = document.body.classList.contains('light-theme');
+    themeToggle.innerText = isLight ? '🌙' : '☀️';
+    localStorage.setItem('theme', isLight ? 'light' : 'dark');
+};
+
 // WebSocket Connection
 const ws = new WebSocket(`ws://${window.location.host}`);
 ws.binaryType = 'arraybuffer';
