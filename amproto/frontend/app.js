@@ -160,6 +160,7 @@ ws.onmessage = async (event) => {
             const peerKey = await crypto.subtle.importKey("raw", peerPublicKeyData, { name: "ECDH", namedCurve: "P-256" }, true, []);
             chat.sharedSecretKey = await deriveSharedSecret(chat.dhKeyPair, peerKey);
             chat.isSecure = true;
+            await persistKeys(); // Save new shared secret
             
             const replyPayload = { publicKey: Array.from(new Uint8Array(myPublicKeyBuffer)), username: myUsername };
             const replyPacket = buildPacket(CMD_DH_REPLY, sender, myId, JSON.stringify(replyPayload));
@@ -177,6 +178,7 @@ ws.onmessage = async (event) => {
             const peerKey = await crypto.subtle.importKey("raw", peerPublicKeyData, { name: "ECDH", namedCurve: "P-256" }, true, []);
             chat.sharedSecretKey = await deriveSharedSecret(chat.dhKeyPair, peerKey);
             chat.isSecure = true;
+            await persistKeys(); // Save new shared secret
             
             renderChatList();
             if (currentActiveChat === sender) openChat(sender);
