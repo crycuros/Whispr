@@ -1,73 +1,48 @@
 const net = require('net');
-const crypto = require('crypto');
 const AMProto = require('./amproto');
 
 const PORT = 3000;
-
-// Store connections and their negotiated secrets
-const clients = new Map();
+const clients = new Map(); // Map of clientID -> socket
 
 const server = net.createServer((socket) => {
     console.log(`\n[Server] New connection from ${socket.remoteAddress}:${socket.remotePort}`);
-    
-    // Create a context for this specific socket
-    const context = {
-        dh: null,
-        sharedSecret: null
-    };
-    clients.set(socket, context);
+    let myId = null;
 
-    socket.on('data', (data) => {
+    socket.on('data', (rawData) => {
         try {
-            const packet = AMProto.parsePacket(data);
+            // Anti-DPI: Deobfuscate traffic to read the routing header
+            const cleanData = AMProto.deobfuscate(rawData);
+            const packet = AMProto.parsePacket(cleanData);
             
-            if (packet.command === AMProto.CMD_DH_INIT) {
-                console.log(`[Server] Received DH_INIT from client.`);
-                const payload = JSON.parse(packet.payloadString);
-                
-                const prime = Buffer.from(payload.prime, 'hex');
-                const generator = Buffer.from(payload.generator, 'hex');
-                context.dh = crypto.createDiffieHellman(prime, generator);
-                context.dh.generateKeys();
-                
-                const clientPublicKey = Buffer.from(payload.publicKey, 'hex');
-                context.sharedSecret = context.dh.computeSecret(clientPublicKey);
-                console.log(`[Server] Shared Secret Established.`);
-
-                const replyPayload = {
-                    publicKey: context.dh.getPublicKey('hex')
-                };
-                const reply = AMProto.buildPacket(AMProto.CMD_DH_REPLY, replyPayload);
-                socket.write(reply);
+            if (packet.command === AMProto.CMD_AUTH) {
+                // Client registering itself
+                myId = parseInt(packet.payloadString);
+                clients.set(myId, socket);
+                console.log(`[Server] Registered Client ID: ${myId}`);
             }
-            else if (packet.command === AMProto.CMD_ENC_MSG) {
-                console.log(`[Server] Received Encrypted Message!`);
-                const payload = JSON.parse(packet.payloadString);
-                
-                if (!context.sharedSecret) {
-                    console.log(`[Server] Error: No shared secret established yet.`);
-                    return;
+            else {
+                // E2EE Zero-Knowledge Relay
+                const targetId = packet.targetId;
+                if (clients.has(targetId)) {
+                    console.log(`[Server] Relaying packet from ${myId} to ${targetId} (Zero Knowledge)`);
+                    const targetSocket = clients.get(targetId);
+                    
+                    // Note: We route the OBFUSCATED rawData directly to avoid tampering
+                    targetSocket.write(rawData);
+                } else {
+                    console.log(`[Server] Target ${targetId} not found.`);
                 }
-
-                // Decrypt the message
-                const decryptedMessage = AMProto.decryptPayload(payload, context.sharedSecret);
-                console.log(`[Server] 🔓 Decrypted Message: "${decryptedMessage}"`);
-                
-                // Send an encrypted reply
-                const replyText = "Message received loud and clear!";
-                const encReply = AMProto.encryptPayload(replyText, context.sharedSecret);
-                const replyPacket = AMProto.buildPacket(AMProto.CMD_ENC_MSG, encReply);
-                socket.write(replyPacket);
             }
-            
         } catch (err) {
             console.error(`[Server] Error processing packet:`, err.message);
         }
     });
 
     socket.on('end', () => {
-        console.log(`[Server] Client disconnected`);
-        clients.delete(socket);
+        if (myId) {
+            clients.delete(myId);
+            console.log(`[Server] Client ${myId} disconnected`);
+        }
     });
 
     socket.on('error', (err) => {
@@ -76,5 +51,5 @@ const server = net.createServer((socket) => {
 });
 
 server.listen(PORT, () => {
-    console.log(`[Server] AM Proto Server listening on port ${PORT}`);
+    console.log(`[Server] AM Proto 2.0 ZERO-KNOWLEDGE RELAY listening on port ${PORT}`);
 });

@@ -1,28 +1,30 @@
 /**
- * AM Proto (Advanced Mobile Protocol) - Phase 3
- * Adding AES-256-CBC Encryption
+ * AM Proto 2.0
+ * Security Upgrades: Obfuscation Layer and E2EE Preparation
  */
 const crypto = require('crypto');
 
 class AMProto {
-    // Commands
     static CMD_AUTH = 0x01;
-    static CMD_SEND_MSG = 0x02;
-    static CMD_PING = 0x03;
     static CMD_DH_INIT = 0x04;
     static CMD_DH_REPLY = 0x05;
     static CMD_ENC_MSG = 0x06;
+    
+    // Obfuscation Mask (Simple XOR to hide the header from DPI)
+    // In production, this would be a dynamic AES-CTR stream like MTProto FakeTLS.
+    static OBFUSCATION_KEY = 0xAB;
 
     /**
      * Builds a binary packet for AM Proto
-     * Header (8 bytes):
+     * Header (12 bytes):
      * [0] Version (1 byte)
      * [1] Command (1 byte)
      * [2-3] Payload Length (2 bytes, UInt16)
      * [4-7] Message ID (4 bytes, UInt32)
+     * [8-11] Target Client ID (4 bytes, UInt32) - Used for server routing
      */
-    static buildPacket(command, payload) {
-        const version = 1;
+    static buildPacket(command, targetId, payload) {
+        const version = 2; // Upgraded to v2
         const msgId = Math.floor(Math.random() * 0xFFFFFFFF);
         
         let payloadBuffer;
@@ -35,18 +37,16 @@ class AMProto {
         }
         const payloadLength = payloadBuffer.length;
 
-        // Allocate buffer: 8 bytes header + payload length
-        const packet = Buffer.alloc(8 + payloadLength);
+        // Allocate buffer: 12 bytes header + payload length
+        const packet = Buffer.alloc(12 + payloadLength);
 
-        // Write Header
         packet.writeUInt8(version, 0);
         packet.writeUInt8(command, 1);
         packet.writeUInt16BE(payloadLength, 2);
         packet.writeUInt32BE(msgId, 4);
+        packet.writeUInt32BE(targetId, 8); // New routing info
 
-        // Write Payload
-        payloadBuffer.copy(packet, 8);
-
+        payloadBuffer.copy(packet, 12);
         return packet;
     }
 
@@ -54,62 +54,59 @@ class AMProto {
      * Parses an incoming binary packet
      */
     static parsePacket(buffer) {
-        if (buffer.length < 8) {
-            throw new Error("Packet too small to be valid AM Proto");
+        if (buffer.length < 12) {
+            throw new Error("Packet too small to be valid AM Proto 2.0");
         }
 
         const version = buffer.readUInt8(0);
         const command = buffer.readUInt8(1);
         const payloadLength = buffer.readUInt16BE(2);
         const msgId = buffer.readUInt32BE(4);
+        const targetId = buffer.readUInt32BE(8);
 
-        // Extract Payload
-        const payloadBuffer = buffer.slice(8, 8 + payloadLength);
+        const payloadBuffer = buffer.slice(12, 12 + payloadLength);
         const payloadString = payloadBuffer.toString('utf-8');
 
-        return {
-            version,
-            command,
-            payloadLength,
-            msgId,
-            payloadString,
-            rawPayload: payloadBuffer
-        };
+        return { version, command, payloadLength, msgId, targetId, payloadString, rawPayload: payloadBuffer };
     }
 
     /**
-     * Encrypts a string using AES-256-CBC and the shared secret
-     * Returns an object containing the IV and the encrypted Hex
+     * Anti-DPI Obfuscation: XOR masks the entire packet
+     * This ensures the packet looks like random noise to firewalls.
      */
+    static obfuscate(buffer) {
+        const obf = Buffer.alloc(buffer.length);
+        for (let i = 0; i < buffer.length; i++) {
+            obf[i] = buffer[i] ^ AMProto.OBFUSCATION_KEY;
+        }
+        // In reality, we'd also append random length padding here to hide traffic signatures.
+        return obf;
+    }
+
+    /**
+     * Anti-DPI Deobfuscation
+     */
+    static deobfuscate(buffer) {
+        // XOR is symmetric
+        return AMProto.obfuscate(buffer);
+    }
+
     static encryptPayload(text, sharedSecret) {
         const iv = crypto.randomBytes(16);
-        // Ensure secret is 32 bytes for AES-256
         const key = crypto.createHash('sha256').update(sharedSecret).digest();
-        
         const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
         let encrypted = cipher.update(text, 'utf-8', 'hex');
         encrypted += cipher.final('hex');
-
-        return {
-            iv: iv.toString('hex'),
-            encryptedData: encrypted
-        };
+        return { iv: iv.toString('hex'), encryptedData: encrypted };
     }
 
-    /**
-     * Decrypts an encrypted payload using AES-256-CBC and the shared secret
-     */
     static decryptPayload(encryptedPayload, sharedSecret) {
         const iv = Buffer.from(encryptedPayload.iv, 'hex');
-        // Ensure secret is 32 bytes for AES-256
         const key = crypto.createHash('sha256').update(sharedSecret).digest();
-        
         const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
         let decrypted = decipher.update(encryptedPayload.encryptedData, 'hex', 'utf-8');
         decrypted += decipher.final('utf-8');
-        
         return decrypted;
     }
 }
-
 module.exports = AMProto;
