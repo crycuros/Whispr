@@ -69,6 +69,10 @@ document.getElementById('btn-login').onclick = async () => {
     const hash = await crypto.subtle.digest('SHA-256', data);
     myPasswordHash = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
     
+    // Load persisted keys BEFORE sending login packet to avoid race conditions with offline messages!
+    myUsername = user; // Needed to construct localStorage key name
+    await loadPersistedKeys();
+    
     const payload = JSON.stringify({ username: user, password: myPasswordHash });
     const packet = buildPacket(CMD_LOGIN, 0, 0, payload);
     ws.send(obfuscate(packet));
@@ -119,8 +123,6 @@ ws.onmessage = async (event) => {
                 document.getElementById('app-container').style.display = 'flex';
                 setTimeout(() => { document.getElementById('app-container').style.opacity = '1'; }, 50);
             }, 500);
-            
-            await loadPersistedKeys();
         }
         else if (packet.command === CMD_RESOLVE_OK) {
             const data = JSON.parse(packet.payloadString);
@@ -216,14 +218,20 @@ ws.onmessage = async (event) => {
 async function persistKeys() {
     const exportableKeys = {};
     for (const [peerId, chat] of chats.entries()) {
+        let exportable = { username: chat.username, isSecure: chat.isSecure };
         if (chat.dhKeyPair) {
             const priv = await crypto.subtle.exportKey("pkcs8", chat.dhKeyPair.privateKey);
             const pub = await crypto.subtle.exportKey("raw", chat.dhKeyPair.publicKey);
-            exportableKeys[peerId] = {
+            exportable.dhKeyPair = {
                 priv: Array.from(new Uint8Array(priv)),
                 pub: Array.from(new Uint8Array(pub))
             };
         }
+        if (chat.sharedSecretKey) {
+            const secret = await crypto.subtle.exportKey("raw", chat.sharedSecretKey);
+            exportable.sharedSecret = Array.from(new Uint8Array(secret));
+        }
+        exportableKeys[peerId] = exportable;
     }
     // Using password hash as AES key to encrypt the local storage keys for security
     const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(myPasswordHash), {name: "PBKDF2"}, false, ["deriveBits", "deriveKey"]);
@@ -256,19 +264,27 @@ async function loadPersistedKeys() {
         const decryptedStore = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(iv) }, wrappingKey, new Uint8Array(data));
         const exportableKeys = JSON.parse(new TextDecoder().decode(decryptedStore));
         
-        for (const [peerIdStr, keys] of Object.entries(exportableKeys)) {
+        for (const [peerIdStr, dataObj] of Object.entries(exportableKeys)) {
             const peerId = parseInt(peerIdStr);
             const chat = getOrCreateChat(peerId);
             
-            const privKey = await crypto.subtle.importKey("pkcs8", new Uint8Array(keys.priv), { name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
-            const pubKey = await crypto.subtle.importKey("raw", new Uint8Array(keys.pub), { name: "ECDH", namedCurve: "P-256" }, true, []);
+            chat.username = dataObj.username;
+            chat.isSecure = dataObj.isSecure;
             
-            chat.dhKeyPair = { privateKey: privKey, publicKey: pubKey };
+            if (dataObj.dhKeyPair) {
+                const privKey = await crypto.subtle.importKey("pkcs8", new Uint8Array(dataObj.dhKeyPair.priv), { name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
+                const pubKey = await crypto.subtle.importKey("raw", new Uint8Array(dataObj.dhKeyPair.pub), { name: "ECDH", namedCurve: "P-256" }, true, []);
+                chat.dhKeyPair = { privateKey: privKey, publicKey: pubKey };
+            }
+            if (dataObj.sharedSecret) {
+                chat.sharedSecretKey = await crypto.subtle.importKey("raw", new Uint8Array(dataObj.sharedSecret), { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
+            }
         }
         console.log("Loaded persisted keys.");
         renderChatList();
     } catch (err) {
         console.error("Failed to load keys:", err);
+        localStorage.removeItem(`whispr_keys_${myUsername}`);
     }
 }
 
@@ -278,7 +294,7 @@ async function deriveSharedSecret(keyPair, peerPublicKey) {
         { name: "ECDH", public: peerPublicKey },
         keyPair.privateKey,
         { name: "AES-GCM", length: 256 },
-        false,
+        true, // Allow extraction to save to localStorage
         ["encrypt", "decrypt"]
     );
 }
@@ -419,9 +435,9 @@ const whisperIconSVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="no
 
 function renderMessages(peerId) {
     const container = document.getElementById('messages');
-    container.innerHTML = `<div class="message-wrapper system"><div class="message system"><span class="msg-content">End-to-End Encryption established with ${peerId}</span></div></div>`;
-    
     const chat = chats.get(peerId);
+    container.innerHTML = chat.isSecure ? `<div class="message-wrapper system"><div class="message system"><span class="msg-content">End-to-End Encryption established with ${chat.username}</span></div></div>` : '';
+    
     chat.messages.forEach(msg => {
         const wrapper = document.createElement('div');
         wrapper.className = `message-wrapper ${msg.type}`;
