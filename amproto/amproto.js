@@ -9,6 +9,7 @@ class AMProto {
     static CMD_DH_INIT = 0x04;
     static CMD_DH_REPLY = 0x05;
     static CMD_ENC_MSG = 0x06;
+    static CMD_TYPING = 0x09;
     
     // Obfuscation Mask (Simple XOR to hide the header from DPI)
     // In production, this would be a dynamic AES-CTR stream like MTProto FakeTLS.

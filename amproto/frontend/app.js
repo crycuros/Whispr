@@ -4,6 +4,7 @@ const CMD_AUTH = 0x01;
 const CMD_DH_INIT = 0x04;
 const CMD_DH_REPLY = 0x05;
 const CMD_ENC_MSG = 0x06;
+const CMD_TYPING = 0x09;
 
 // Random user ID between 1000 and 9999
 const myId = Math.floor(Math.random() * 9000) + 1000;
@@ -72,6 +73,9 @@ ws.onmessage = async (event) => {
             const payload = JSON.parse(packet.payloadString);
             const decryptedMsg = await decryptPayload(payload);
             appendMessage(decryptedMsg, 'received');
+        }
+        else if (packet.command === CMD_TYPING) {
+            showTypingIndicator();
         }
     } catch (err) {
         console.error("Protocol Error:", err);
@@ -194,8 +198,33 @@ function appendMessage(text, type) {
     const div = document.createElement('div');
     div.className = `message ${type}`;
     div.innerText = text;
-    document.getElementById('messages').appendChild(div);
+    
+    const messagesContainer = document.getElementById('messages');
+    const indicator = document.getElementById('typing-indicator');
+    
+    // Insert before typing indicator if it exists
+    if (indicator) {
+        messagesContainer.insertBefore(div, indicator);
+    } else {
+        messagesContainer.appendChild(div);
+    }
+    
     div.scrollIntoView({ behavior: 'smooth' });
+}
+
+let typingTimeout = null;
+function showTypingIndicator() {
+    const indicator = document.getElementById('typing-indicator');
+    if (!indicator) return;
+    
+    indicator.style.display = 'flex';
+    document.getElementById('messages').appendChild(indicator); // move to bottom
+    indicator.scrollIntoView({ behavior: 'smooth' });
+    
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+        indicator.style.display = 'none';
+    }, 2000);
 }
 
 document.getElementById('btn-send').onclick = async () => {
@@ -214,4 +243,17 @@ document.getElementById('btn-send').onclick = async () => {
 
 document.getElementById('msg-input').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') document.getElementById('btn-send').click();
+});
+
+let lastTypingSent = 0;
+document.getElementById('msg-input').addEventListener('input', () => {
+    if (!targetId || !window.chatEnabled) return;
+    
+    const now = Date.now();
+    // Throttle typing packet to once per second
+    if (now - lastTypingSent > 1000) {
+        lastTypingSent = now;
+        const typingPacket = buildPacket(CMD_TYPING, targetId, "");
+        ws.send(obfuscate(typingPacket));
+    }
 });
