@@ -13,33 +13,50 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <h2>Whispr</h2>
-                <span class="status-dot"></span>
-            </div>
-            <div class="connection-panel">
-                <p>Your ID: <strong id="my-id">...</strong></p>
-                <div class="input-group">
-                    <input type="number" id="target-id" placeholder="Connect to ID...">
-                    <button id="btn-connect">Connect</button>
+                <div class="header-right">
+                    <span class="my-id-badge">ID: <span id="my-id">...</span></span>
+                    <span class="status-dot"></span>
                 </div>
-                <p id="crypto-status" class="status-text text-muted">Waiting for connection...</p>
+            </div>
+            
+            <div class="new-chat-container">
+                <input type="number" id="new-chat-input" placeholder="Peer ID..." autocomplete="off">
+                <button id="btn-new-chat" title="New Chat">+</button>
+            </div>
+
+            <div class="chat-list" id="chat-list">
+                <!-- Dynamic chat list items will appear here -->
             </div>
         </aside>
 
         <!-- Main Chat Area -->
-        <main class="chat-area">
+        <main class="chat-area" id="main-chat-area" style="display: none;">
             <div class="chat-header">
-                <h3 id="chat-title">E2EE Chat</h3>
+                <div>
+                    <h3 id="chat-title">Chat</h3>
+                    <p id="crypto-status" class="status-text text-muted">Connecting...</p>
+                </div>
                 <span class="badge" id="e2e-badge" style="opacity: 0.5;">Not Encrypted</span>
             </div>
             <div class="messages-container" id="messages">
                 <!-- Messages will appear here -->
-                <div class="message system">Welcome to Whispr! Enter a peer's ID to initiate End-to-End Encryption.</div>
-                <div id="typing-indicator" class="typing-indicator" style="display: none;"><span></span><span></span><span></span></div>
+                <div class="message-wrapper system">
+                    <div class="message system">
+                        <span class="msg-content">End-to-End Encryption established.</span>
+                    </div>
+                </div>
             </div>
             <div class="input-area">
                 <input type="text" id="msg-input" placeholder="Type a secret message..." disabled autocomplete="off">
                 <button id="btn-send" disabled>Send</button>
             </div>
+        </main>
+        
+        <!-- Empty State (When no chat is selected) -->
+        <main class="chat-area empty-state" id="empty-state">
+            <div class="empty-icon">🤫</div>
+            <h3>Welcome to Whispr</h3>
+            <p>Select a chat or start a new one.</p>
         </main>
     </div>
     <script src="app.js"></script>

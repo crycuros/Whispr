@@ -1,4 +1,3 @@
-// AM Proto WebClient Implementation
 const OBFUSCATION_KEY = 0xAB;
 const CMD_AUTH = 0x01;
 const CMD_DH_INIT = 0x04;
@@ -7,21 +6,19 @@ const CMD_ENC_MSG = 0x06;
 const CMD_TYPING = 0x09;
 const CMD_READ = 0x0A;
 
-// Random user ID between 1000 and 9999
 const myId = Math.floor(Math.random() * 9000) + 1000;
-let targetId = null;
-let sharedSecretKey = null; // CryptoKey object
-let dhKeyPair = null; // ECDH keys (WebCrypto doesn't do pure DH easily, we use ECDH for the browser)
-
 document.getElementById('my-id').innerText = myId;
 
-// Connect to Server via WebSocket
+// State Management
+const chats = new Map(); // peerId -> Chat Object
+let currentActiveChat = null; // currently focused peerId
+
+// WebSocket Connection
 const ws = new WebSocket(`ws://${window.location.host}`);
-ws.binaryType = 'arraybuffer'; // Crucial for reading raw bytes!
+ws.binaryType = 'arraybuffer';
 
 ws.onopen = () => {
-    console.log("Connected to Zero-Knowledge Relay");
-    // Register
+    console.log("Connected to Relay");
     const authPacket = buildPacket(CMD_AUTH, 0, myId.toString());
     ws.send(obfuscate(authPacket));
 };
@@ -30,268 +27,305 @@ ws.onmessage = async (event) => {
     const rawData = new Uint8Array(event.data);
     const cleanData = deobfuscate(rawData);
     const packet = parsePacket(cleanData);
+    
+    const sender = packet.senderId;
+    if (!sender && packet.command !== CMD_AUTH) return;
 
     try {
         if (packet.command === CMD_DH_INIT) {
-            targetId = packet.senderId; // FIXED: Set target to the sender's ID, not our own!
-            updateCryptoStatus(`Received handshake from ${targetId}...`, false);
+            let chat = getOrCreateChat(sender);
             
             const payload = JSON.parse(packet.payloadString);
             const peerPublicKeyData = new Uint8Array(payload.publicKey);
             
             // Generate our ECDH keys
-            dhKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
-            const myPublicKeyBuffer = await crypto.subtle.exportKey("raw", dhKeyPair.publicKey);
+            chat.dhKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
+            const myPublicKeyBuffer = await crypto.subtle.exportKey("raw", chat.dhKeyPair.publicKey);
             
             // Import peer's key
-            const peerKey = await crypto.subtle.importKey(
-                "raw", peerPublicKeyData, { name: "ECDH", namedCurve: "P-256" }, true, []
-            );
-            
-            // Derive shared secret
-            await deriveSharedSecret(peerKey);
+            const peerKey = await crypto.subtle.importKey("raw", peerPublicKeyData, { name: "ECDH", namedCurve: "P-256" }, true, []);
+            chat.sharedSecretKey = await deriveSharedSecret(chat.dhKeyPair, peerKey);
+            chat.isSecure = true;
             
             // Send Reply
             const replyPayload = { publicKey: Array.from(new Uint8Array(myPublicKeyBuffer)) };
-            const replyPacket = buildPacket(CMD_DH_REPLY, packet.senderId || targetId, JSON.stringify(replyPayload));
+            const replyPacket = buildPacket(CMD_DH_REPLY, sender, JSON.stringify(replyPayload));
             ws.send(obfuscate(replyPacket));
             
-            enableChat();
+            renderChatList();
+            if (currentActiveChat === sender) openChat(sender);
         }
         else if (packet.command === CMD_DH_REPLY) {
-            updateCryptoStatus(`Keys established with ${targetId}!`, true);
+            let chat = getOrCreateChat(sender);
             const payload = JSON.parse(packet.payloadString);
             const peerPublicKeyData = new Uint8Array(payload.publicKey);
             
-            const peerKey = await crypto.subtle.importKey(
-                "raw", peerPublicKeyData, { name: "ECDH", namedCurve: "P-256" }, true, []
-            );
+            const peerKey = await crypto.subtle.importKey("raw", peerPublicKeyData, { name: "ECDH", namedCurve: "P-256" }, true, []);
+            chat.sharedSecretKey = await deriveSharedSecret(chat.dhKeyPair, peerKey);
+            chat.isSecure = true;
             
-            await deriveSharedSecret(peerKey);
-            enableChat();
+            renderChatList();
+            if (currentActiveChat === sender) openChat(sender);
         }
         else if (packet.command === CMD_ENC_MSG) {
-            const payload = JSON.parse(packet.payloadString);
-            const decryptedMsg = await decryptPayload(payload);
-            hideTypingIndicator(); // Hide instantly when message arrives
-            appendMessage(decryptedMsg, 'received');
+            let chat = getOrCreateChat(sender);
+            if (!chat.sharedSecretKey) return; // Ignore if not secure
             
-            // Send Read Receipt back!
-            if (targetId) {
-                const readPacket = buildPacket(CMD_READ, targetId, "");
+            const payload = JSON.parse(packet.payloadString);
+            const decryptedMsg = await decryptPayload(chat.sharedSecretKey, payload);
+            
+            chat.messages.push({ text: decryptedMsg, type: 'received', isRead: true });
+            
+            if (currentActiveChat === sender) {
+                // Instantly send read receipt if we are looking at it
+                const readPacket = buildPacket(CMD_READ, sender, "");
                 ws.send(obfuscate(readPacket));
+                renderMessages(sender); // re-render to show new msg
+            } else {
+                chat.unreadCount++;
+                renderChatList();
             }
         }
         else if (packet.command === CMD_TYPING) {
-            showTypingIndicator();
+            if (currentActiveChat === sender) showTypingIndicator();
         }
         else if (packet.command === CMD_READ) {
-            markMessagesAsRead();
+            let chat = getOrCreateChat(sender);
+            // Mark all sent messages as read
+            chat.messages.forEach(m => {
+                if (m.type === 'sent') m.isRead = true;
+            });
+            if (currentActiveChat === sender) renderMessages(sender);
         }
     } catch (err) {
         console.error("Protocol Error:", err);
     }
 };
 
-// --- WebCrypto E2EE (ECDH + AES-GCM) --- //
-// Note: Web Crypto uses ECDH which is faster and safer than classic DH for browsers
-async function deriveSharedSecret(peerPublicKey) {
-    sharedSecretKey = await crypto.subtle.deriveKey(
+// --- WebCrypto ---
+async function deriveSharedSecret(keyPair, peerPublicKey) {
+    return await crypto.subtle.deriveKey(
         { name: "ECDH", public: peerPublicKey },
-        dhKeyPair.privateKey,
+        keyPair.privateKey,
         { name: "AES-GCM", length: 256 },
         false,
         ["encrypt", "decrypt"]
     );
-    console.log("Shared Secret Derived!");
 }
-
-async function encryptPayload(text) {
+async function encryptPayload(secretKey, text) {
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encodedText = new TextEncoder().encode(text);
-    const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, sharedSecretKey, encodedText);
-    
-    return {
-        iv: Array.from(iv),
-        encryptedData: Array.from(new Uint8Array(ciphertext))
-    };
+    const encoded = new TextEncoder().encode(text);
+    const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, secretKey, encoded);
+    return { iv: Array.from(iv), encryptedData: Array.from(new Uint8Array(cipher)) };
 }
-
-async function decryptPayload(payload) {
+async function decryptPayload(secretKey, payload) {
     const iv = new Uint8Array(payload.iv);
-    const ciphertext = new Uint8Array(payload.encryptedData);
-    
-    const decryptedBuffer = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, sharedSecretKey, ciphertext);
-    return new TextDecoder().decode(decryptedBuffer);
+    const cipher = new Uint8Array(payload.encryptedData);
+    const dec = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, secretKey, cipher);
+    return new TextDecoder().decode(dec);
 }
 
-// --- AM Proto Formatters --- //
+// --- AM Proto ---
 function buildPacket(command, target, payloadString) {
     const payloadBuffer = new TextEncoder().encode(payloadString);
     const payloadLength = payloadBuffer.length;
-    
-    // 16 bytes header: Version(1), Cmd(1), Len(2), MsgId(4), TargetId(4), SenderId(4)
     const buffer = new ArrayBuffer(16 + payloadLength);
     const view = new DataView(buffer);
     const u8 = new Uint8Array(buffer);
     
-    view.setUint8(0, 2); // v2
+    view.setUint8(0, 2);
     view.setUint8(1, command);
     view.setUint16(2, payloadLength, false);
     view.setUint32(4, Math.floor(Math.random() * 0xFFFFFFFF), false);
     view.setUint32(8, target, false);
-    view.setUint32(12, myId, false); // Add Sender ID so receiver knows who sent it
+    view.setUint32(12, myId, false);
     
     u8.set(payloadBuffer, 16);
     return u8;
 }
-
 function parsePacket(u8) {
     const view = new DataView(u8.buffer);
-    const payloadBuffer = u8.slice(16);
     return {
-        version: view.getUint8(0),
         command: view.getUint8(1),
-        payloadLength: view.getUint16(2, false),
-        msgId: view.getUint32(4, false),
         targetId: view.getUint32(8, false),
         senderId: view.getUint32(12, false),
-        payloadString: new TextDecoder().decode(payloadBuffer)
+        payloadString: new TextDecoder().decode(u8.slice(16))
     };
 }
-
 function obfuscate(u8) {
     const obf = new Uint8Array(u8.length);
     for (let i = 0; i < u8.length; i++) obf[i] = u8[i] ^ OBFUSCATION_KEY;
     return obf;
 }
-function deobfuscate(u8) { return obfuscate(u8); } // XOR is symmetric
+function deobfuscate(u8) { return obfuscate(u8); }
 
-// --- UI Logic --- //
-document.getElementById('btn-connect').onclick = async () => {
-    targetId = parseInt(document.getElementById('target-id').value);
-    if (!targetId) return;
+// --- State Management ---
+function getOrCreateChat(peerId) {
+    if (!chats.has(peerId)) {
+        chats.set(peerId, {
+            peerId: peerId,
+            dhKeyPair: null,
+            sharedSecretKey: null,
+            messages: [],
+            unreadCount: 0,
+            isSecure: false
+        });
+        renderChatList();
+    }
+    return chats.get(peerId);
+}
+
+// --- UI Logic ---
+document.getElementById('btn-new-chat').onclick = async () => {
+    const peerId = parseInt(document.getElementById('new-chat-input').value);
+    if (!peerId || peerId === myId) return;
+    document.getElementById('new-chat-input').value = '';
     
-    updateCryptoStatus(`Initiating E2EE with ${targetId}...`, false);
+    let chat = getOrCreateChat(peerId);
+    openChat(peerId);
     
-    // Generate ECDH keys
-    dhKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
-    const myPublicKeyBuffer = await crypto.subtle.exportKey("raw", dhKeyPair.publicKey);
-    
-    const payload = { publicKey: Array.from(new Uint8Array(myPublicKeyBuffer)) };
-    const initPacket = buildPacket(CMD_DH_INIT, targetId, JSON.stringify(payload));
-    ws.send(obfuscate(initPacket));
+    if (!chat.isSecure && !chat.dhKeyPair) {
+        // Init E2EE
+        document.getElementById('crypto-status').innerText = 'Initiating E2EE...';
+        chat.dhKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
+        const myPub = await crypto.subtle.exportKey("raw", chat.dhKeyPair.publicKey);
+        const packet = buildPacket(CMD_DH_INIT, peerId, JSON.stringify({ publicKey: Array.from(new Uint8Array(myPub)) }));
+        ws.send(obfuscate(packet));
+    }
 };
 
-function updateCryptoStatus(msg, success) {
-    const el = document.getElementById('crypto-status');
-    el.innerText = msg;
-    if (success) {
-        el.className = 'status-text text-success';
-        document.getElementById('e2e-badge').style.opacity = '1';
-        document.getElementById('e2e-badge').innerText = 'End-to-End Encrypted';
-    }
-}
-
-function enableChat() {
-    updateCryptoStatus(`E2EE Secured with ${targetId}`, true);
-    document.getElementById('msg-input').disabled = false;
-    document.getElementById('btn-send').disabled = false;
+function renderChatList() {
+    const list = document.getElementById('chat-list');
+    list.innerHTML = '';
     
-    // Check if we already printed the success message to prevent spam
-    if (!window.chatEnabled) {
-        appendMessage(`Secure E2E tunnel established with ID: ${targetId}`, 'system');
-        window.chatEnabled = true;
-    }
-}
-
-function appendMessage(text, type) {
-    const wrapper = document.createElement('div');
-    wrapper.className = `message-wrapper ${type}`;
-
-    const div = document.createElement('div');
-    div.className = `message`; // type is on the wrapper now, but we keep styling via wrapper
-    if(type === 'system') div.classList.add('system');
-    else if (type === 'sent') div.classList.add('sent');
-    else if (type === 'received') div.classList.add('received');
-    
-    const contentSpan = document.createElement('span');
-    contentSpan.className = 'msg-content';
-    contentSpan.innerText = text;
-    div.appendChild(contentSpan);
-    
-    wrapper.appendChild(div);
-    
-const whisperIconSVG = `
-<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-    <path d="M6 9 C 8 11, 8 13, 6 15" />
-    <path d="M11 5 C 15 9, 15 15, 11 19" />
-    <path d="M16 1 C 22 7, 22 17, 16 23" />
-</svg>`;
-
-    // Add read status for sent messages OUTSIDE the bubble
-    if (type === 'sent') {
-        const statusSpan = document.createElement('span');
-        statusSpan.className = 'read-status';
-        statusSpan.innerHTML = whisperIconSVG;
-        wrapper.appendChild(statusSpan);
-    }
-    
-    const messagesContainer = document.getElementById('messages');
-    const indicator = document.getElementById('typing-indicator');
-    
-    // Insert before typing indicator if it exists
-    if (indicator) {
-        messagesContainer.insertBefore(wrapper, indicator);
-    } else {
-        messagesContainer.appendChild(wrapper);
-    }
-    
-    wrapper.scrollIntoView({ behavior: 'smooth' });
-}
-
-let typingTimeout = null;
-function showTypingIndicator() {
-    const indicator = document.getElementById('typing-indicator');
-    if (!indicator) return;
-    
-    indicator.style.display = 'flex';
-    document.getElementById('messages').appendChild(indicator); // move to bottom
-    indicator.scrollIntoView({ behavior: 'smooth' });
-    
-    clearTimeout(typingTimeout);
-    typingTimeout = setTimeout(() => {
-        hideTypingIndicator();
-    }, 1500); // Reduced from 2000ms to 1500ms for faster hide
-}
-
-function hideTypingIndicator() {
-    const indicator = document.getElementById('typing-indicator');
-    if (indicator) {
-        indicator.style.display = 'none';
-        clearTimeout(typingTimeout);
-    }
-}
-
-function markMessagesAsRead() {
-    // Change all icons to white
-    const statuses = document.querySelectorAll('.read-status:not(.seen)');
-    statuses.forEach(span => {
-        span.classList.add('seen');
+    chats.forEach(chat => {
+        const item = document.createElement('div');
+        item.className = `chat-item ${currentActiveChat === chat.peerId ? 'active' : ''}`;
+        
+        let lastMsg = chat.messages.length > 0 ? chat.messages[chat.messages.length - 1].text : (chat.isSecure ? 'Secure Tunnel Ready' : 'Connecting...');
+        
+        item.innerHTML = `
+            <div class="chat-info">
+                <h4>Peer ${chat.peerId}</h4>
+                <p>${lastMsg}</p>
+            </div>
+            ${chat.unreadCount > 0 ? `<span class="unread-badge">${chat.unreadCount}</span>` : ''}
+        `;
+        
+        item.onclick = () => openChat(chat.peerId);
+        list.appendChild(item);
     });
 }
 
+function openChat(peerId) {
+    currentActiveChat = peerId;
+    const chat = chats.get(peerId);
+    
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('main-chat-area').style.display = 'flex';
+    document.getElementById('chat-title').innerText = `Peer ${peerId}`;
+    
+    if (chat.unreadCount > 0) {
+        // Send Read Receipts for unread messages!
+        const readPacket = buildPacket(CMD_READ, peerId, "");
+        ws.send(obfuscate(readPacket));
+        chat.unreadCount = 0;
+    }
+    
+    renderChatList(); // update active class & clear badge
+    renderMessages(peerId);
+    
+    const input = document.getElementById('msg-input');
+    const btn = document.getElementById('btn-send');
+    if (chat.isSecure) {
+        document.getElementById('crypto-status').innerText = 'Secure E2EE Tunnel';
+        document.getElementById('crypto-status').className = 'status-text text-success';
+        document.getElementById('e2e-badge').style.opacity = '1';
+        input.disabled = false;
+        btn.disabled = false;
+        input.focus();
+    } else {
+        document.getElementById('crypto-status').innerText = 'Waiting for peer...';
+        document.getElementById('crypto-status').className = 'status-text text-muted';
+        document.getElementById('e2e-badge').style.opacity = '0.5';
+        input.disabled = true;
+        btn.disabled = true;
+    }
+}
+
+const whisperIconSVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9 C 8 11, 8 13, 6 15" /><path d="M11 5 C 15 9, 15 15, 11 19" /><path d="M16 1 C 22 7, 22 17, 16 23" /></svg>`;
+
+function renderMessages(peerId) {
+    const container = document.getElementById('messages');
+    container.innerHTML = `<div class="message-wrapper system"><div class="message system"><span class="msg-content">End-to-End Encryption established with ${peerId}</span></div></div>`;
+    
+    const chat = chats.get(peerId);
+    chat.messages.forEach(msg => {
+        const wrapper = document.createElement('div');
+        wrapper.className = `message-wrapper ${msg.type}`;
+
+        const div = document.createElement('div');
+        div.className = `message ${msg.type}`;
+        
+        const contentSpan = document.createElement('span');
+        contentSpan.className = 'msg-content';
+        contentSpan.innerText = msg.text;
+        div.appendChild(contentSpan);
+        
+        wrapper.appendChild(div);
+
+        if (msg.type === 'sent') {
+            const statusSpan = document.createElement('span');
+            statusSpan.className = 'read-status' + (msg.isRead ? ' seen' : '');
+            statusSpan.innerHTML = whisperIconSVG;
+            wrapper.appendChild(statusSpan);
+        }
+        
+        container.appendChild(wrapper);
+    });
+    
+    container.scrollTop = container.scrollHeight;
+}
+
+// Typing Indicator
+let typingTimeout = null;
+function showTypingIndicator() {
+    let indicator = document.getElementById('typing-indicator');
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'typing-indicator';
+        indicator.className = 'typing-indicator';
+        indicator.innerHTML = '<span></span><span></span><span></span>';
+    }
+    
+    const container = document.getElementById('messages');
+    indicator.style.display = 'flex';
+    container.appendChild(indicator);
+    container.scrollTop = container.scrollHeight;
+    
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+        indicator.style.display = 'none';
+    }, 1500);
+}
+
 document.getElementById('btn-send').onclick = async () => {
+    if (!currentActiveChat) return;
+    const chat = chats.get(currentActiveChat);
     const input = document.getElementById('msg-input');
     const text = input.value.trim();
-    if (!text) return;
+    if (!text || !chat.isSecure) return;
     
     input.value = '';
-    appendMessage(text, 'sent');
+    
+    // Add to state and render immediately
+    chat.messages.push({ text, type: 'sent', isRead: false });
+    renderMessages(currentActiveChat);
+    renderChatList();
     
     // Encrypt and send
-    const encryptedPayload = await encryptPayload(text);
-    const encPacket = buildPacket(CMD_ENC_MSG, targetId, JSON.stringify(encryptedPayload));
+    const encryptedPayload = await encryptPayload(chat.sharedSecretKey, text);
+    const encPacket = buildPacket(CMD_ENC_MSG, currentActiveChat, JSON.stringify(encryptedPayload));
     ws.send(obfuscate(encPacket));
 };
 
@@ -301,13 +335,14 @@ document.getElementById('msg-input').addEventListener('keypress', (e) => {
 
 let lastTypingSent = 0;
 document.getElementById('msg-input').addEventListener('input', () => {
-    if (!targetId || !window.chatEnabled) return;
+    if (!currentActiveChat) return;
+    const chat = chats.get(currentActiveChat);
+    if (!chat.isSecure) return;
     
     const now = Date.now();
-    // Throttle typing packet to 500ms for snappier response
     if (now - lastTypingSent > 500) {
         lastTypingSent = now;
-        const typingPacket = buildPacket(CMD_TYPING, targetId, "");
+        const typingPacket = buildPacket(CMD_TYPING, currentActiveChat, "");
         ws.send(obfuscate(typingPacket));
     }
 });
