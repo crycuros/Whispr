@@ -215,11 +215,11 @@ function appendMessage(text, type) {
     contentSpan.innerText = text;
     div.appendChild(contentSpan);
     
-    // Add read status for sent messages (Single Checkmark initially)
+    // Add read status for sent messages
     if (type === 'sent') {
         const statusSpan = document.createElement('span');
         statusSpan.className = 'read-status';
-        statusSpan.innerText = '✓';
+        statusSpan.innerText = 'whispered...';
         div.appendChild(statusSpan);
     }
     
@@ -260,10 +260,10 @@ function hideTypingIndicator() {
 }
 
 function markMessagesAsRead() {
-    // Change all single checks to blue double checks
+    // Change all 'whispered...' to 'heard'
     const statuses = document.querySelectorAll('.read-status:not(.seen)');
     statuses.forEach(span => {
-        span.innerText = '✓✓';
+        span.innerText = 'heard';
         span.classList.add('seen');
     });
 }

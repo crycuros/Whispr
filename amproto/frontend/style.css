@@ -179,12 +179,15 @@ button:disabled { background: #334155; color: #94a3b8; cursor: not-allowed; }
     display: inline-block;
 }
 .read-status {
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.65rem;
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.4);
     margin-left: 8px;
     float: right;
-    margin-top: 4px;
+    margin-top: 6px;
+    letter-spacing: 0.5px;
 }
 .read-status.seen {
-    color: #38bdf8; /* Blue double check for seen */
+    color: #10b981; /* Green color for heard */
+    text-shadow: 0 0 5px rgba(16, 185, 129, 0.5);
 }
