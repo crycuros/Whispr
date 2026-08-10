@@ -8,7 +8,7 @@ const PORT = 3000;
 const clients = new Map();
 
 const server = net.createServer((socket) => {
-    console.log(`[Server] New connection from ${socket.remoteAddress}:${socket.remotePort}`);
+    console.log(`\n[Server] New connection from ${socket.remoteAddress}:${socket.remotePort}`);
     
     // Create a context for this specific socket
     const context = {
@@ -25,31 +25,39 @@ const server = net.createServer((socket) => {
                 console.log(`[Server] Received DH_INIT from client.`);
                 const payload = JSON.parse(packet.payloadString);
                 
-                // 1. Initialize DH with client's prime and generator
                 const prime = Buffer.from(payload.prime, 'hex');
                 const generator = Buffer.from(payload.generator, 'hex');
                 context.dh = crypto.createDiffieHellman(prime, generator);
-                
-                // 2. Generate server's keys
                 context.dh.generateKeys();
                 
-                // 3. Compute shared secret using client's public key
                 const clientPublicKey = Buffer.from(payload.publicKey, 'hex');
                 context.sharedSecret = context.dh.computeSecret(clientPublicKey);
-                
-                console.log(`[Server] Computed Shared Secret (first 4 bytes): ${context.sharedSecret.slice(0, 4).toString('hex')}...`);
+                console.log(`[Server] Shared Secret Established.`);
 
-                // 4. Send DH_REPLY with server's public key
                 const replyPayload = {
                     publicKey: context.dh.getPublicKey('hex')
                 };
                 const reply = AMProto.buildPacket(AMProto.CMD_DH_REPLY, replyPayload);
                 socket.write(reply);
             }
-            else if (packet.command === AMProto.CMD_AUTH) {
-                console.log(`[Server] Client attempting to AUTH: ${packet.payloadString}`);
-                const reply = AMProto.buildPacket(AMProto.CMD_PING, "Auth Success");
-                socket.write(reply);
+            else if (packet.command === AMProto.CMD_ENC_MSG) {
+                console.log(`[Server] Received Encrypted Message!`);
+                const payload = JSON.parse(packet.payloadString);
+                
+                if (!context.sharedSecret) {
+                    console.log(`[Server] Error: No shared secret established yet.`);
+                    return;
+                }
+
+                // Decrypt the message
+                const decryptedMessage = AMProto.decryptPayload(payload, context.sharedSecret);
+                console.log(`[Server] 🔓 Decrypted Message: "${decryptedMessage}"`);
+                
+                // Send an encrypted reply
+                const replyText = "Message received loud and clear!";
+                const encReply = AMProto.encryptPayload(replyText, context.sharedSecret);
+                const replyPacket = AMProto.buildPacket(AMProto.CMD_ENC_MSG, encReply);
+                socket.write(replyPacket);
             }
             
         } catch (err) {

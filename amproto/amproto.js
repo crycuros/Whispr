@@ -1,7 +1,8 @@
 /**
- * AM Proto (Advanced Mobile Protocol) - Phase 1
- * Basic binary serialization for our custom protocol.
+ * AM Proto (Advanced Mobile Protocol) - Phase 3
+ * Adding AES-256-CBC Encryption
  */
+const crypto = require('crypto');
 
 class AMProto {
     // Commands
@@ -10,6 +11,7 @@ class AMProto {
     static CMD_PING = 0x03;
     static CMD_DH_INIT = 0x04;
     static CMD_DH_REPLY = 0x05;
+    static CMD_ENC_MSG = 0x06;
 
     /**
      * Builds a binary packet for AM Proto
@@ -73,6 +75,40 @@ class AMProto {
             payloadString,
             rawPayload: payloadBuffer
         };
+    }
+
+    /**
+     * Encrypts a string using AES-256-CBC and the shared secret
+     * Returns an object containing the IV and the encrypted Hex
+     */
+    static encryptPayload(text, sharedSecret) {
+        const iv = crypto.randomBytes(16);
+        // Ensure secret is 32 bytes for AES-256
+        const key = crypto.createHash('sha256').update(sharedSecret).digest();
+        
+        const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+        let encrypted = cipher.update(text, 'utf-8', 'hex');
+        encrypted += cipher.final('hex');
+
+        return {
+            iv: iv.toString('hex'),
+            encryptedData: encrypted
+        };
+    }
+
+    /**
+     * Decrypts an encrypted payload using AES-256-CBC and the shared secret
+     */
+    static decryptPayload(encryptedPayload, sharedSecret) {
+        const iv = Buffer.from(encryptedPayload.iv, 'hex');
+        // Ensure secret is 32 bytes for AES-256
+        const key = crypto.createHash('sha256').update(sharedSecret).digest();
+        
+        const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+        let decrypted = decipher.update(encryptedPayload.encryptedData, 'hex', 'utf-8');
+        decrypted += decipher.final('utf-8');
+        
+        return decrypted;
     }
 }
 

@@ -10,13 +10,9 @@ let clientDH;
 let sharedSecret;
 
 client.connect(PORT, HOST, () => {
-    console.log(`[Client] Connected to AM Proto Server at ${HOST}:${PORT}`);
+    console.log(`\n[Client] Connected to AM Proto Server at ${HOST}:${PORT}`);
 
-    // Step 1: Initialize DH Key Exchange
-    console.log(`[Client] Generating Diffie-Hellman keys (this might take a second)...`);
-    
-    // We use a smaller prime (512 bit) here for faster generation in prototype,
-    // in real life this should be 2048 or more.
+    console.log(`[Client] Initiating Key Exchange...`);
     clientDH = crypto.createDiffieHellman(512); 
     clientDH.generateKeys();
     
@@ -26,7 +22,6 @@ client.connect(PORT, HOST, () => {
         publicKey: clientDH.getPublicKey('hex')
     };
 
-    console.log(`[Client] Sending DH_INIT to server...`);
     const initPacket = AMProto.buildPacket(AMProto.CMD_DH_INIT, payload);
     client.write(initPacket);
 });
@@ -36,17 +31,30 @@ client.on('data', (data) => {
         const packet = AMProto.parsePacket(data);
         
         if (packet.command === AMProto.CMD_DH_REPLY) {
-            console.log(`[Client] Received DH_REPLY from server.`);
+            console.log(`[Client] Received DH_REPLY. Keys established!`);
             const payload = JSON.parse(packet.payloadString);
             
-            // Step 2: Compute shared secret using server's public key
             const serverPublicKey = Buffer.from(payload.publicKey, 'hex');
             sharedSecret = clientDH.computeSecret(serverPublicKey);
             
-            console.log(`[Client] Computed Shared Secret (first 4 bytes): ${sharedSecret.slice(0, 4).toString('hex')}...`);
-            console.log(`[Client] Phase 2 DH Key Exchange SUCCESS!`);
+            // Now that we have a shared secret, let's send a secret message
+            const secretMessage = "Hello from Jessie! This is top secret.";
+            console.log(`[Client] 🔒 Encrypting message: "${secretMessage}"`);
             
-            // Cleanly close connection after getting reply
+            const encryptedPayload = AMProto.encryptPayload(secretMessage, sharedSecret);
+            console.log(`[Client] Sending Ciphertext: ${encryptedPayload.encryptedData.slice(0,20)}...`);
+            
+            const encPacket = AMProto.buildPacket(AMProto.CMD_ENC_MSG, encryptedPayload);
+            client.write(encPacket);
+        }
+        else if (packet.command === AMProto.CMD_ENC_MSG) {
+            console.log(`[Client] Received Encrypted Reply from server!`);
+            const payload = JSON.parse(packet.payloadString);
+            
+            const decryptedMessage = AMProto.decryptPayload(payload, sharedSecret);
+            console.log(`[Client] 🔓 Decrypted Reply: "${decryptedMessage}"`);
+            
+            // Cleanly close connection
             client.destroy();
         }
     } catch (err) {
