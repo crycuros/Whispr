@@ -157,10 +157,12 @@ ws.onmessage = async (event) => {
             
             const peerPublicKeyData = new Uint8Array(payload.publicKey);
             
-            if (!chat.dhKeyPair) {
-                chat.dhKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
-                await persistKeys();
-            }
+            // Always generate FRESH keys when we receive DH_INIT.
+            // If we reuse old keys while the peer has new keys, the shared secrets won't match.
+            chat.dhKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
+            chat.isSecure = false;
+            chat.sharedSecretKey = null;
+            await persistKeys();
             const myPublicKeyBuffer = await crypto.subtle.exportKey("raw", chat.dhKeyPair.publicKey);
             
             const peerKey = await crypto.subtle.importKey("raw", peerPublicKeyData, { name: "ECDH", namedCurve: "P-256" }, true, []);
