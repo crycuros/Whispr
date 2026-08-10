@@ -270,8 +270,8 @@ async function loadPersistedKeys() {
             const peerId = parseInt(peerIdStr);
             const chat = getOrCreateChat(peerId);
             
-            chat.username = dataObj.username;
-            chat.isSecure = dataObj.isSecure;
+            chat.username = dataObj.username || `User ${peerId}`;
+            chat.isSecure = dataObj.isSecure || false;
             
             if (dataObj.dhKeyPair) {
                 const privKey = await crypto.subtle.importKey("pkcs8", new Uint8Array(dataObj.dhKeyPair.priv), { name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
