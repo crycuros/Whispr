@@ -106,6 +106,17 @@ wss.on('connection', (ws) => {
                 } catch (e) {
                     console.error("Login parsing error", e);
                 }
+            } else if (packet.command === AMProto.CMD_RESOLVE) {
+                const targetUsername = packet.payloadString.trim();
+                db.get(`SELECT id, username FROM users WHERE username = ?`, [targetUsername], (err, row) => {
+                    if (err || !row) {
+                        const errPacket = AMProto.buildPacket(AMProto.CMD_ERROR, packet.senderId, 0, JSON.stringify({ message: 'User not found' }));
+                        ws.send(AMProto.obfuscate(errPacket));
+                    } else {
+                        const okPacket = AMProto.buildPacket(AMProto.CMD_RESOLVE_OK, packet.senderId, 0, JSON.stringify({ userId: row.id, username: row.username }));
+                        ws.send(AMProto.obfuscate(okPacket));
+                    }
+                });
             } else if (packet.command === AMProto.CMD_ENC_MSG) {
                 const targetId = packet.targetId;
                 const senderId = packet.senderId;

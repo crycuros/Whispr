@@ -17,6 +17,8 @@ class AMProto {
     static CMD_READ = 0x0A;
     static CMD_SYNC = 0x0B;
     static CMD_ERROR = 0x0C;
+    static CMD_RESOLVE = 0x0D;
+    static CMD_RESOLVE_OK = 0x0E;
     
     // Obfuscation Mask (Simple XOR to hide the header from DPI)
     // In production, this would be a dynamic AES-CTR stream like MTProto FakeTLS.

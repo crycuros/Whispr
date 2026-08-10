@@ -11,6 +11,8 @@ const CMD_TYPING = 0x09;
 const CMD_READ = 0x0A;
 const CMD_SYNC = 0x0B;
 const CMD_ERROR = 0x0C;
+const CMD_RESOLVE = 0x0D;
+const CMD_RESOLVE_OK = 0x0E;
 
 let myId = null;
 let myUsername = null;
@@ -120,10 +122,31 @@ ws.onmessage = async (event) => {
             
             await loadPersistedKeys();
         }
+        else if (packet.command === CMD_RESOLVE_OK) {
+            const data = JSON.parse(packet.payloadString);
+            const peerId = data.userId;
+            
+            let chat = getOrCreateChat(peerId);
+            chat.username = data.username;
+            
+            openChat(peerId);
+            
+            if (!chat.isSecure && !chat.dhKeyPair) {
+                document.getElementById('crypto-status').innerText = 'Initiating E2EE...';
+                chat.dhKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
+                await persistKeys();
+                
+                const myPub = await crypto.subtle.exportKey("raw", chat.dhKeyPair.publicKey);
+                const initPacket = buildPacket(CMD_DH_INIT, peerId, myId, JSON.stringify({ publicKey: Array.from(new Uint8Array(myPub)), username: myUsername }));
+                ws.send(obfuscate(initPacket));
+            }
+        }
         else if (packet.command === CMD_DH_INIT) {
             let chat = getOrCreateChat(sender);
             
             const payload = JSON.parse(packet.payloadString);
+            if (payload.username) chat.username = payload.username;
+            
             const peerPublicKeyData = new Uint8Array(payload.publicKey);
             
             if (!chat.dhKeyPair) {
@@ -136,7 +159,7 @@ ws.onmessage = async (event) => {
             chat.sharedSecretKey = await deriveSharedSecret(chat.dhKeyPair, peerKey);
             chat.isSecure = true;
             
-            const replyPayload = { publicKey: Array.from(new Uint8Array(myPublicKeyBuffer)) };
+            const replyPayload = { publicKey: Array.from(new Uint8Array(myPublicKeyBuffer)), username: myUsername };
             const replyPacket = buildPacket(CMD_DH_REPLY, sender, myId, JSON.stringify(replyPayload));
             ws.send(obfuscate(replyPacket));
             
@@ -146,6 +169,7 @@ ws.onmessage = async (event) => {
         else if (packet.command === CMD_DH_REPLY) {
             let chat = getOrCreateChat(sender);
             const payload = JSON.parse(packet.payloadString);
+            if (payload.username) chat.username = payload.username;
             const peerPublicKeyData = new Uint8Array(payload.publicKey);
             
             const peerKey = await crypto.subtle.importKey("raw", peerPublicKeyData, { name: "ECDH", namedCurve: "P-256" }, true, []);
@@ -310,6 +334,7 @@ function getOrCreateChat(peerId) {
     if (!chats.has(peerId)) {
         chats.set(peerId, {
             peerId: peerId,
+            username: `User ${peerId}`, // fallback
             dhKeyPair: null,
             sharedSecretKey: null,
             messages: [],
@@ -323,22 +348,13 @@ function getOrCreateChat(peerId) {
 
 // --- UI Logic ---
 document.getElementById('btn-new-chat').onclick = async () => {
-    const peerId = parseInt(document.getElementById('new-chat-input').value);
-    if (!peerId || peerId === myId) return;
+    const username = document.getElementById('new-chat-input').value.trim();
+    if (!username || username === myUsername) return;
     document.getElementById('new-chat-input').value = '';
     
-    let chat = getOrCreateChat(peerId);
-    openChat(peerId);
-    
-    if (!chat.isSecure && !chat.dhKeyPair) {
-        document.getElementById('crypto-status').innerText = 'Initiating E2EE...';
-        chat.dhKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
-        await persistKeys();
-        
-        const myPub = await crypto.subtle.exportKey("raw", chat.dhKeyPair.publicKey);
-        const packet = buildPacket(CMD_DH_INIT, peerId, myId, JSON.stringify({ publicKey: Array.from(new Uint8Array(myPub)) }));
-        ws.send(obfuscate(packet));
-    }
+    // Send resolve request to server
+    const resolvePacket = buildPacket(CMD_RESOLVE, 0, myId, username);
+    ws.send(obfuscate(resolvePacket));
 };
 
 function renderChatList() {
@@ -353,7 +369,7 @@ function renderChatList() {
         
         item.innerHTML = `
             <div class="chat-info">
-                <h4>Peer ${chat.peerId}</h4>
+                <h4>${chat.username}</h4>
                 <p>${lastMsg}</p>
             </div>
             ${chat.unreadCount > 0 ? `<span class="unread-badge">${chat.unreadCount}</span>` : ''}
@@ -370,7 +386,7 @@ function openChat(peerId) {
     
     document.getElementById('empty-state').style.display = 'none';
     document.getElementById('main-chat-area').style.display = 'flex';
-    document.getElementById('chat-title').innerText = `Peer ${peerId}`;
+    document.getElementById('chat-title').innerText = `${chat.username}`;
     
     if (chat.unreadCount > 0) {
         const readPacket = buildPacket(CMD_READ, peerId, myId, "");
