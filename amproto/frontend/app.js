@@ -72,6 +72,7 @@ ws.onmessage = async (event) => {
         else if (packet.command === CMD_ENC_MSG) {
             const payload = JSON.parse(packet.payloadString);
             const decryptedMsg = await decryptPayload(payload);
+            hideTypingIndicator(); // Hide instantly when message arrives
             appendMessage(decryptedMsg, 'received');
         }
         else if (packet.command === CMD_TYPING) {
@@ -223,8 +224,16 @@ function showTypingIndicator() {
     
     clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => {
+        hideTypingIndicator();
+    }, 1500); // Reduced from 2000ms to 1500ms for faster hide
+}
+
+function hideTypingIndicator() {
+    const indicator = document.getElementById('typing-indicator');
+    if (indicator) {
         indicator.style.display = 'none';
-    }, 2000);
+        clearTimeout(typingTimeout);
+    }
 }
 
 document.getElementById('btn-send').onclick = async () => {
@@ -250,8 +259,8 @@ document.getElementById('msg-input').addEventListener('input', () => {
     if (!targetId || !window.chatEnabled) return;
     
     const now = Date.now();
-    // Throttle typing packet to once per second
-    if (now - lastTypingSent > 1000) {
+    // Throttle typing packet to 500ms for snappier response
+    if (now - lastTypingSent > 500) {
         lastTypingSent = now;
         const typingPacket = buildPacket(CMD_TYPING, targetId, "");
         ws.send(obfuscate(typingPacket));
