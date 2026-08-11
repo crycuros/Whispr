@@ -850,14 +850,23 @@ function initCustomSelects() {
 }
 initCustomSelects();
 
+function updateSliderBackground(slider) {
+    if (!slider) return;
+    const min = parseFloat(slider.min) || 0;
+    const max = parseFloat(slider.max) || 100;
+    const val = parseFloat(slider.value) || 0;
+    const percentage = ((val - min) / (max - min)) * 100;
+    slider.style.backgroundSize = `${percentage}% 100%`;
+}
+
 function applyPreferences(prefs) {
     if (!prefs) return;
     
     // UI Elements Sync
     if (prefs.theme) { prefTheme.value = prefs.theme; updateCustomSelectUI(prefTheme); }
     if (prefs.display) { prefDisplay.value = prefs.display; updateCustomSelectUI(prefDisplay); }
-    if (prefs.fontScale) prefFontScale.value = prefs.fontScale;
-    if (prefs.msgSpace) prefMsgSpace.value = prefs.msgSpace;
+    if (prefs.fontScale) { prefFontScale.value = prefs.fontScale; updateSliderBackground(prefFontScale); }
+    if (prefs.msgSpace) { prefMsgSpace.value = prefs.msgSpace; updateSliderBackground(prefMsgSpace); }
     if (prefs.zoom) { prefZoom.value = prefs.zoom; updateCustomSelectUI(prefZoom); }
     if (prefs.embeds !== undefined) prefEmbeds.checked = prefs.embeds;
     if (prefs.reactions !== undefined) prefReactions.checked = prefs.reactions;
@@ -875,7 +884,11 @@ function applyPreferences(prefs) {
 }
 
 [prefTheme, prefDisplay].forEach(el => el.addEventListener('change', savePreferences));
-[prefFontScale, prefMsgSpace, prefZoom].forEach(el => el.addEventListener('input', savePreferences));
+[prefFontScale, prefMsgSpace].forEach(el => el.addEventListener('input', (e) => {
+    updateSliderBackground(e.target);
+    savePreferences();
+}));
+prefZoom.addEventListener('change', savePreferences);
 [prefEmbeds, prefReactions, prefAutoplayGif, prefReducedMotion].forEach(el => el.addEventListener('change', savePreferences));
 
 function applyThemeColor(color) {
