@@ -20,6 +20,14 @@ class AMProto {
     static CMD_RESOLVE = 0x0D;
     static CMD_RESOLVE_OK = 0x0E;
     
+    // Group commands
+    static CMD_GROUP_CREATE = 0x10;
+    static CMD_GROUP_CREATE_OK = 0x11;
+    static CMD_GROUP_MSG = 0x13;
+    static CMD_GROUP_MSG_RELAY = 0x14;
+    static CMD_GROUP_INFO_OK = 0x16;
+    static CMD_GROUP_READ = 0x19;
+    
     // Obfuscation Mask (Simple XOR to hide the header from DPI)
     // In production, this would be a dynamic AES-CTR stream like MTProto FakeTLS.
     static OBFUSCATION_KEY = 0xAB;

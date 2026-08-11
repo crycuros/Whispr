@@ -24,6 +24,36 @@ db.serialize(() => {
         payload TEXT,
         is_read INTEGER DEFAULT 0
     )`);
+    db.run(`CREATE TABLE IF NOT EXISTS groups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        created_by INTEGER NOT NULL,
+        is_feed INTEGER DEFAULT 0,
+        created_at INTEGER DEFAULT (strftime('%s','now'))
+    )`);
+    db.run(`ALTER TABLE groups ADD COLUMN is_feed INTEGER DEFAULT 0`, (err) => { /* ignore error */ });
+    db.run(`ALTER TABLE groups ADD COLUMN description TEXT`, (err) => { /* ignore error */ });
+    db.run(`ALTER TABLE groups ADD COLUMN avatar_url TEXT`, (err) => { /* ignore error */ });
+    db.run(`CREATE TABLE IF NOT EXISTS group_members (
+        group_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        role TEXT DEFAULT 'member',
+        joined_at INTEGER DEFAULT (strftime('%s','now')),
+        PRIMARY KEY (group_id, user_id)
+    )`);
+    db.run(`CREATE TABLE IF NOT EXISTS group_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        group_id INTEGER NOT NULL,
+        sender_id INTEGER NOT NULL,
+        text TEXT NOT NULL,
+        sent_at INTEGER DEFAULT (strftime('%s','now'))
+    )`);
+    db.run(`CREATE TABLE IF NOT EXISTS group_read (
+        group_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        last_read INTEGER DEFAULT 0,
+        PRIMARY KEY (group_id, user_id)
+    )`);
 });
 
 // 1. Static File Server for our UI
@@ -101,6 +131,30 @@ wss.on('connection', (ws) => {
                                     });
                                 }
                             });
+
+                            // Send unread group messages
+                            db.all(`
+                                SELECT gm.id, gm.group_id, gm.sender_id, gm.text
+                                FROM group_messages gm
+                                JOIN group_members mem ON gm.group_id = mem.group_id
+                                LEFT JOIN group_read gr ON gr.group_id = mem.group_id AND gr.user_id = mem.user_id
+                                WHERE mem.user_id = ? 
+                                AND gm.sent_at >= mem.joined_at
+                                AND gm.id > IFNULL(gr.last_read, 0)
+                            `, [myId], (err, rows) => {
+                                if (!err && rows && rows.length > 0) {
+                                    rows.forEach(msgRow => {
+                                        const payload = JSON.stringify({
+                                            groupId: msgRow.group_id,
+                                            senderId: msgRow.sender_id,
+                                            text: msgRow.text,
+                                            messageId: msgRow.id
+                                        });
+                                        const groupMsgPacket = AMProto.buildPacket(AMProto.CMD_GROUP_MSG_RELAY, myId, msgRow.sender_id, payload);
+                                        ws.send(AMProto.obfuscate(groupMsgPacket));
+                                    });
+                                }
+                            });
                         }
                     });
                 } catch (e) {
@@ -138,6 +192,82 @@ wss.on('connection', (ws) => {
                 } else {
                     console.log(`[Server] Target ${targetId} offline. Message saved.`);
                 }
+            } else if (packet.command === AMProto.CMD_GROUP_CREATE) {
+                const { name, members, isFeed, description, avatarUrl } = JSON.parse(packet.payloadString);
+                db.run(`INSERT INTO groups (name, created_by, is_feed, description, avatar_url) VALUES (?, ?, ?, ?, ?)`, [name, packet.senderId, isFeed ? 1 : 0, description, avatarUrl], function(err) {
+                    if (err) {
+                        const errPacket = AMProto.buildPacket(AMProto.CMD_ERROR, packet.senderId, 0, JSON.stringify({ message: 'Group creation failed' }));
+                        ws.send(AMProto.obfuscate(errPacket));
+                    } else {
+                        const groupId = this.lastID;
+                        const allMembers = Array.from(new Set([packet.senderId, ...members]));
+                        
+                        const stmt = db.prepare(`INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, ?)`);
+                        allMembers.forEach(userId => {
+                            stmt.run(groupId, userId, userId === packet.senderId ? 'admin' : 'member');
+                        });
+                        stmt.finalize();
+                        
+                        const okPacket = AMProto.buildPacket(AMProto.CMD_GROUP_CREATE_OK, packet.senderId, 0, JSON.stringify({ groupId, name, members: allMembers, isFeed: !!isFeed, description, avatarUrl, creatorId: packet.senderId }));
+                        ws.send(AMProto.obfuscate(okPacket));
+                        
+                        const infoPacketStr = JSON.stringify({ groupId, name, members: allMembers, isFeed: !!isFeed, description, avatarUrl, creatorId: packet.senderId });
+                        allMembers.forEach(userId => {
+                            if (userId !== packet.senderId && clients.has(userId)) {
+                                const targetWs = clients.get(userId);
+                                if (targetWs.readyState === WebSocket.OPEN) {
+                                    const infoPacket = AMProto.buildPacket(AMProto.CMD_GROUP_INFO_OK, userId, 0, infoPacketStr);
+                                    targetWs.send(AMProto.obfuscate(infoPacket));
+                                }
+                            }
+                        });
+                    }
+                });
+            } else if (packet.command === AMProto.CMD_GROUP_MSG) {
+                const { groupId, text } = JSON.parse(packet.payloadString);
+                const senderId = packet.senderId;
+                
+                db.get(`SELECT g.is_feed, gm.role FROM groups g JOIN group_members gm ON g.id = gm.group_id WHERE g.id = ? AND gm.user_id = ?`, [groupId, senderId], (err, row) => {
+                    if (err || !row) {
+                        const errPacket = AMProto.buildPacket(AMProto.CMD_ERROR, senderId, 0, JSON.stringify({ message: 'Not a member of group' }));
+                        ws.send(AMProto.obfuscate(errPacket));
+                    } else if (row.is_feed === 1 && row.role !== 'admin') {
+                        const errPacket = AMProto.buildPacket(AMProto.CMD_ERROR, senderId, 0, JSON.stringify({ message: 'Only admins can post in feeds' }));
+                        ws.send(AMProto.obfuscate(errPacket));
+                    } else {
+                        db.run(`INSERT INTO group_messages (group_id, sender_id, text) VALUES (?, ?, ?)`, [groupId, senderId, text], function(err) {
+                            if (!err) {
+                                const messageId = this.lastID;
+                                
+                                db.all(`SELECT user_id FROM group_members WHERE group_id = ?`, [groupId], (err, rows) => {
+                                    if (!err && rows) {
+                                        const payload = JSON.stringify({ groupId, senderId, text, messageId });
+                                        
+                                        rows.forEach(memberRow => {
+                                            const memberId = memberRow.user_id;
+                                            if (memberId !== senderId && clients.has(memberId)) {
+                                                const targetWs = clients.get(memberId);
+                                                if (targetWs.readyState === WebSocket.OPEN) {
+                                                    const relayPacket = AMProto.buildPacket(AMProto.CMD_GROUP_MSG_RELAY, memberId, senderId, payload);
+                                                    targetWs.send(AMProto.obfuscate(relayPacket));
+                                                }
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+            } else if (packet.command === AMProto.CMD_GROUP_READ) {
+                const { groupId, lastReadMsgId } = JSON.parse(packet.payloadString);
+                db.run(`
+                    INSERT INTO group_read (group_id, user_id, last_read) 
+                    VALUES (?, ?, ?) 
+                    ON CONFLICT(group_id, user_id) DO UPDATE SET last_read = max(last_read, excluded.last_read)
+                `, [groupId, packet.senderId, lastReadMsgId], (err) => {
+                    if (err) console.error("Error upserting group_read", err);
+                });
             } else {
                 // Relay other commands (DH_INIT, DH_REPLY, TYPING, READ)
                 const targetId = packet.targetId;
@@ -167,5 +297,5 @@ wss.on('connection', (ws) => {
 });
 
 server.listen(PORT, () => {
-    console.log(`[Server] Whispr Web App running on http://localhost:${PORT}`);
+    console.log(`[Server] Mensayo Web App running on http://localhost:${PORT}`);
 });

@@ -22,6 +22,9 @@ namespace WhisprDesktop
         
         public List<MessageData> Messages { get; set; } = new List<MessageData>();
 
+        public bool IsGroup { get; set; }
+        public List<string> Members { get; set; } = new List<string>();
+
         [JsonIgnore]
         public int UnreadCount
         {
@@ -38,13 +41,36 @@ namespace WhisprDesktop
         private int _unreadCount;
 
         [JsonIgnore]
-        public string LastMessagePreview => Messages.Count > 0 ? Messages[^1].Text : "Start messaging";
+        public string LastMessagePreview => Messages.Count > 0 ? Messages[^1].Text : (IsGroup ? "Group created" : "Start messaging");
+
+        [JsonIgnore]
+        public string LastMessageTimeText
+        {
+            get
+            {
+                if (Messages.Count == 0 || Messages[^1].Timestamp == default) return "";
+                var t = Messages[^1].Timestamp;
+                return t.Date == DateTime.Today ? t.ToString("HH:mm") : t.ToString("MMM d");
+            }
+        }
+
+        [JsonIgnore]
+        public bool ShowReadReceipt => Messages.Count > 0 && Messages[^1].Type == "sent";
+
+        [JsonIgnore]
+        public bool LastMessageRead => ShowReadReceipt && Messages[^1].IsRead;
+
+        [JsonIgnore]
+        public string MemberCountText => IsGroup ? $"👥 {Members.Count}" : "";
 
         public event PropertyChangedEventHandler PropertyChanged;
 
         public void NotifyMessagesChanged()
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(LastMessagePreview)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(LastMessageTimeText)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowReadReceipt)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(LastMessageRead)));
         }
     }
 
@@ -59,7 +85,9 @@ namespace WhisprDesktop
         public string Text { get; set; }
         public string Type { get; set; } // 'sent', 'received', 'system'
         public bool IsRead { get; set; }
+        public bool JustRead { get; set; } // Temporary flag for animation
         public DateTime Timestamp { get; set; }
+        public string Sender { get; set; }
     }
 
     public class StorageHelper

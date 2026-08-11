@@ -1,3 +1,10 @@
+if (localStorage.getItem('whispr_session')) {
+    document.getElementById('auth-modal').style.display = 'none';
+    document.getElementById('app-container').style.display = 'flex';
+    document.getElementById('app-container').style.opacity = '1';
+    document.getElementById('update-toast').style.display = 'flex';
+}
+
 const OBFUSCATION_KEY = 0xAB;
 const CMD_AUTH = 0x01;
 const CMD_LOGIN = 0x02;
@@ -13,49 +20,85 @@ const CMD_SYNC = 0x0B;
 const CMD_ERROR = 0x0C;
 const CMD_RESOLVE = 0x0D;
 const CMD_RESOLVE_OK = 0x0E;
+const CMD_GROUP_CREATE = 0x10;
+const CMD_GROUP_CREATE_OK = 0x11;
+const CMD_GROUP_MSG = 0x13;
+const CMD_GROUP_MSG_RELAY = 0x14;
+const CMD_GROUP_INFO_OK = 0x16;
+const CMD_GROUP_READ = 0x19;
+
+const AVATAR_PALETTE = ['#3390EC', '#297A4A', '#E06C75', '#8E6CD6', '#F08C3A', '#43A09E', '#7090C6', '#B76CE8'];
 
 let myId = null;
 let myUsername = null;
-let myPasswordHash = null; // Just SHA-256 for local key derivation
+let myPasswordHash = null;
 
-// State Management
 const chats = new Map(); // peerId -> Chat Object
-let currentActiveChat = null; 
+let currentActiveChat = null;
+let groupSeq = 1;
 
-// Theme Toggle
-const themeToggle = document.getElementById('theme-toggle');
-const themeIcon = document.getElementById('theme-icon');
-
-const sunSVG = `<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>`;
-const moonSVG = `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>`;
-
-if (localStorage.getItem('theme') === 'dark') {
-    document.body.classList.add('dark-theme');
-    themeIcon.innerHTML = sunSVG;
-} else {
-    themeIcon.innerHTML = moonSVG;
+// ============ Helpers ============
+function initials(name) {
+    if (!name) return '?';
+    return String(name).trim().charAt(0).toUpperCase();
 }
+function avatarColor(name) {
+    const key = String(name || '?');
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) & 0x7FFFFFFF;
+    return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+}
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function formatTime(ts) {
+    if (!ts) return '';
+    return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+function formatListTime(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) return formatTime(ts);
+    if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function dateLabel(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) return 'Today';
+    if (d.toDateString() === new Date(now.getTime() - 86400000).toDateString()) return 'Yesterday';
+    return d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+}
+const whisperIconSVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M6 9 C 8 11, 8 13, 6 15" /><path d="M11 5 C 15 9, 15 15, 11 19" /><path d="M16 1 C 22 7, 22 17, 16 23" /></svg>`;
 
-themeToggle.onclick = () => {
-    document.body.classList.toggle('dark-theme');
-    const isDark = document.body.classList.contains('dark-theme');
-    themeIcon.innerHTML = isDark ? sunSVG : moonSVG;
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
-};
-
-// WebSocket Connection
+// ============ WebSocket ============
 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 const ws = new WebSocket(`${protocol}//${window.location.host}`);
 ws.binaryType = 'arraybuffer';
 
 ws.onopen = () => {
     console.log("Connected to Relay Server");
+    const session = localStorage.getItem('whispr_session');
+    if (session) {
+        const { user, hash } = JSON.parse(session);
+        myUsername = user;
+        myPasswordHash = hash;
+        loadPersistedKeys().then(() => {
+            const payload = JSON.stringify({ username: user, password: hash });
+            const packet = buildPacket(CMD_LOGIN, 0, 0, payload);
+            ws.send(obfuscate(packet));
+        });
+    }
 };
 
 function showError(msg) {
     const errDiv = document.getElementById('auth-error');
     errDiv.innerText = msg;
     errDiv.style.display = 'block';
+    errDiv.style.color = '#ef4444';
+    errDiv.style.background = 'rgba(239,68,68,0.1)';
     setTimeout(() => { errDiv.style.display = 'none'; }, 3000);
 }
 
@@ -64,21 +107,16 @@ document.getElementById('btn-login').onclick = async () => {
         alert("Connecting to server... Please try again in a second.");
         return;
     }
-    
     const user = document.getElementById('auth-username').value.trim();
     const pass = document.getElementById('auth-password').value.trim();
     if (!user || !pass) return showError("Please enter credentials");
-    
-    // Simple hash for local key wrapping (not true bcrypt for prototype)
-    const encoder = new TextEncoder();
-    const data = encoder.encode(pass);
-    const hash = await crypto.subtle.digest('SHA-256', data);
-    myPasswordHash = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-    
-    // Load persisted keys BEFORE sending login packet to avoid race conditions with offline messages!
-    myUsername = user; // Needed to construct localStorage key name
+
+    const hash = await sha256(pass);
+    myPasswordHash = hash;
+    myUsername = user;
+    localStorage.setItem('whispr_session', JSON.stringify({ user, hash }));
     await loadPersistedKeys();
-    
+
     const payload = JSON.stringify({ username: user, password: myPasswordHash });
     const packet = buildPacket(CMD_LOGIN, 0, 0, payload);
     ws.send(obfuscate(packet));
@@ -88,22 +126,25 @@ document.getElementById('btn-register').onclick = async () => {
     const user = document.getElementById('auth-username').value.trim();
     const pass = document.getElementById('auth-password').value.trim();
     if (!user || !pass) return showError("Please enter credentials");
-    
-    const encoder = new TextEncoder();
-    const data = encoder.encode(pass);
-    const hash = await crypto.subtle.digest('SHA-256', data);
-    myPasswordHash = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-    
+
+    const hash = await sha256(pass);
+    myPasswordHash = hash;
+
     const payload = JSON.stringify({ username: user, password: myPasswordHash });
     const packet = buildPacket(CMD_REGISTER, 0, 0, payload);
     ws.send(obfuscate(packet));
 };
 
+async function sha256(str) {
+    const data = new TextEncoder().encode(str);
+    const hash = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 ws.onmessage = async (event) => {
     const rawData = new Uint8Array(event.data);
     const cleanData = deobfuscate(rawData);
     const packet = parsePacket(cleanData);
-    
     const sender = packet.senderId;
 
     try {
@@ -119,10 +160,16 @@ ws.onmessage = async (event) => {
             const data = JSON.parse(packet.payloadString);
             myId = data.userId;
             myUsername = data.username;
-            
-            document.getElementById('my-id').innerText = `${myUsername} (${myId})`;
-            
-            // Hide Auth, Show App
+
+            const avatar = document.getElementById('my-avatar');
+            avatar.innerText = initials(myUsername);
+            avatar.style.background = avatarColor(myUsername);
+
+            const toast = document.getElementById('update-toast');
+            if (toast && toast.style.display !== 'none') {
+                setTimeout(() => { toast.style.display = 'none'; }, 800); // 800ms delay to make it visible
+            }
+
             document.getElementById('auth-modal').style.opacity = '0';
             setTimeout(() => {
                 document.getElementById('auth-modal').style.display = 'none';
@@ -133,17 +180,16 @@ ws.onmessage = async (event) => {
         else if (packet.command === CMD_RESOLVE_OK) {
             const data = JSON.parse(packet.payloadString);
             const peerId = data.userId;
-            
+
             let chat = getOrCreateChat(peerId);
             chat.username = data.username;
-            
+
             openChat(peerId);
-            
+
             if (!chat.isSecure && !chat.dhKeyPair) {
-                document.getElementById('crypto-status').innerText = 'Initiating E2EE...';
                 chat.dhKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
                 await persistKeys();
-                
+
                 const myPub = await crypto.subtle.exportKey("raw", chat.dhKeyPair.publicKey);
                 const initPacket = buildPacket(CMD_DH_INIT, peerId, myId, JSON.stringify({ publicKey: Array.from(new Uint8Array(myPub)), username: myUsername }));
                 ws.send(obfuscate(initPacket));
@@ -151,12 +197,12 @@ ws.onmessage = async (event) => {
         }
         else if (packet.command === CMD_DH_INIT) {
             let chat = getOrCreateChat(sender);
-            
+
             const payload = JSON.parse(packet.payloadString);
             if (payload.username) chat.username = payload.username;
-            
+
             const peerPublicKeyData = new Uint8Array(payload.publicKey);
-            
+
             // Always generate FRESH keys when we receive DH_INIT.
             // If we reuse old keys while the peer has new keys, the shared secrets won't match.
             chat.dhKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
@@ -164,16 +210,16 @@ ws.onmessage = async (event) => {
             chat.sharedSecretKey = null;
             await persistKeys();
             const myPublicKeyBuffer = await crypto.subtle.exportKey("raw", chat.dhKeyPair.publicKey);
-            
+
             const peerKey = await crypto.subtle.importKey("raw", peerPublicKeyData, { name: "ECDH", namedCurve: "P-256" }, true, []);
             chat.sharedSecretKey = await deriveSharedSecret(chat.dhKeyPair, peerKey);
             chat.isSecure = true;
-            await persistKeys(); // Save new shared secret
-            
+            await persistKeys();
+
             const replyPayload = { publicKey: Array.from(new Uint8Array(myPublicKeyBuffer)), username: myUsername };
             const replyPacket = buildPacket(CMD_DH_REPLY, sender, myId, JSON.stringify(replyPayload));
             ws.send(obfuscate(replyPacket));
-            
+
             renderChatList();
             if (currentActiveChat === sender) openChat(sender);
         }
@@ -182,36 +228,43 @@ ws.onmessage = async (event) => {
             const payload = JSON.parse(packet.payloadString);
             if (payload.username) chat.username = payload.username;
             const peerPublicKeyData = new Uint8Array(payload.publicKey);
-            
+
             const peerKey = await crypto.subtle.importKey("raw", peerPublicKeyData, { name: "ECDH", namedCurve: "P-256" }, true, []);
             chat.sharedSecretKey = await deriveSharedSecret(chat.dhKeyPair, peerKey);
             chat.isSecure = true;
-            await persistKeys(); // Save new shared secret
-            
+            await persistKeys();
+
             renderChatList();
             if (currentActiveChat === sender) openChat(sender);
         }
         else if (packet.command === CMD_ENC_MSG) {
             let chat = getOrCreateChat(sender);
-            if (!chat.sharedSecretKey) return; 
-            
+            if (!chat.sharedSecretKey) return;
+
             const payload = JSON.parse(packet.payloadString);
             const decryptedMsg = await decryptPayload(chat.sharedSecretKey, payload);
-            
-            chat.messages.push({ text: decryptedMsg, type: 'received', isRead: true });
+
+            chat.messages.push({ text: decryptedMsg, type: 'received', isRead: true, time: Date.now() });
+            chat.typing = false;
             await persistKeys();
-            
+
             if (currentActiveChat === sender) {
                 const readPacket = buildPacket(CMD_READ, sender, myId, "");
                 ws.send(obfuscate(readPacket));
                 renderMessages(sender);
             } else {
                 chat.unreadCount++;
-                renderChatList();
             }
+            renderChatList();
         }
         else if (packet.command === CMD_TYPING) {
+            const chat = chats.get(sender);
+            if (!chat) return;
+            chat.typing = true;
+            clearTimeout(chat._typingTimer);
+            chat._typingTimer = setTimeout(() => { chat.typing = false; renderChatList(); }, 3000);
             if (currentActiveChat === sender) showTypingIndicator();
+            renderChatList();
         }
         else if (packet.command === CMD_READ) {
             let chat = getOrCreateChat(sender);
@@ -220,16 +273,67 @@ ws.onmessage = async (event) => {
             });
             await persistKeys();
             if (currentActiveChat === sender) renderMessages(sender);
+            renderChatList();
+        }
+        else if (packet.command === CMD_GROUP_CREATE_OK || packet.command === CMD_GROUP_INFO_OK) {
+            const payload = JSON.parse(packet.payloadString);
+            const { groupId, name, description, avatarUrl, members, isFeed, creatorId } = payload;
+            const groupPeerId = 'group_' + groupId;
+            chats.set(groupPeerId, {
+                isGroup: true,
+                isFeed: isFeed,
+                creatorId: creatorId,
+                groupId: groupId,
+                username: name,
+                description: description,
+                avatarUrl: avatarUrl,
+                members: members,
+                messages: chats.get(groupPeerId)?.messages || [],
+                unreadCount: chats.get(groupPeerId)?.unreadCount || 0
+            });
+            renderChatList();
+        }
+        else if (packet.command === CMD_GROUP_MSG_RELAY) {
+            const payload = JSON.parse(packet.payloadString);
+            const { groupId, senderId, text, messageId } = payload;
+            const groupPeerId = 'group_' + groupId;
+            let chat = chats.get(groupPeerId);
+            if (!chat) return;
+
+            // Fetch sender username from our contacts if possible, or fallback
+            let senderName = `User ${senderId}`;
+            if (senderId === myId) senderName = myUsername;
+            else if (chats.has(senderId)) senderName = chats.get(senderId).username;
+
+            chat.messages.push({
+                senderId: senderId,
+                senderUsername: senderName,
+                text: text,
+                type: senderId === myId ? 'sent' : 'received',
+                isRead: true, // we received it, so it's read
+                time: Date.now(),
+                messageId: messageId
+            });
+
+            if (currentActiveChat === groupPeerId) {
+                const readPacket = buildPacket(CMD_GROUP_READ, 0, myId, JSON.stringify({ groupId, lastReadMsgId: messageId }));
+                ws.send(obfuscate(readPacket));
+                renderMessages(groupPeerId);
+            } else {
+                chat.unreadCount++;
+            }
+            renderChatList();
         }
     } catch (err) {
         console.error("Protocol Error:", err);
     }
 };
 
-// --- Persistent Key Management ---
+// ============ Persistent Key Management ============
 async function persistKeys() {
     const exportableKeys = {};
     for (const [peerId, chat] of chats.entries()) {
+        if (chat.isGroup) continue; // Groups are ephemeral/local
         let exportable = { username: chat.username, isSecure: chat.isSecure, messages: chat.messages };
         if (chat.dhKeyPair) {
             const priv = await crypto.subtle.exportKey("pkcs8", chat.dhKeyPair.privateKey);
@@ -245,16 +349,15 @@ async function persistKeys() {
         }
         exportableKeys[peerId] = exportable;
     }
-    // Using password hash as AES key to encrypt the local storage keys for security
-    const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(myPasswordHash), {name: "PBKDF2"}, false, ["deriveBits", "deriveKey"]);
+    const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(myPasswordHash), { name: "PBKDF2" }, false, ["deriveBits", "deriveKey"]);
     const wrappingKey = await crypto.subtle.deriveKey(
         { "name": "PBKDF2", salt: new Uint8Array(16), iterations: 1000, hash: "SHA-256" },
-        keyMaterial, { "name": "AES-GCM", "length": 256 }, false, [ "encrypt", "decrypt" ]
+        keyMaterial, { "name": "AES-GCM", "length": 256 }, false, ["encrypt", "decrypt"]
     );
-    
+
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const encryptedStore = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, wrappingKey, new TextEncoder().encode(JSON.stringify(exportableKeys)));
-    
+
     localStorage.setItem(`whispr_keys_${myUsername}`, JSON.stringify({
         iv: Array.from(iv),
         data: Array.from(new Uint8Array(encryptedStore))
@@ -264,26 +367,27 @@ async function persistKeys() {
 async function loadPersistedKeys() {
     const stored = localStorage.getItem(`whispr_keys_${myUsername}`);
     if (!stored) return;
-    
+
     try {
         const { iv, data } = JSON.parse(stored);
-        const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(myPasswordHash), {name: "PBKDF2"}, false, ["deriveBits", "deriveKey"]);
+        const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(myPasswordHash), { name: "PBKDF2" }, false, ["deriveBits", "deriveKey"]);
         const wrappingKey = await crypto.subtle.deriveKey(
             { "name": "PBKDF2", salt: new Uint8Array(16), iterations: 1000, hash: "SHA-256" },
-            keyMaterial, { "name": "AES-GCM", "length": 256 }, false, [ "encrypt", "decrypt" ]
+            keyMaterial, { "name": "AES-GCM", "length": 256 }, false, ["encrypt", "decrypt"]
         );
-        
+
         const decryptedStore = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(iv) }, wrappingKey, new Uint8Array(data));
         const exportableKeys = JSON.parse(new TextDecoder().decode(decryptedStore));
-        
+
         for (const [peerIdStr, dataObj] of Object.entries(exportableKeys)) {
             const peerId = parseInt(peerIdStr);
+            if (isNaN(peerId)) continue;
             const chat = getOrCreateChat(peerId);
-            
+
             chat.username = dataObj.username || `User ${peerId}`;
             chat.isSecure = dataObj.isSecure || false;
             chat.messages = dataObj.messages || [];
-            
+
             if (dataObj.dhKeyPair) {
                 const privKey = await crypto.subtle.importKey("pkcs8", new Uint8Array(dataObj.dhKeyPair.priv), { name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
                 const pubKey = await crypto.subtle.importKey("raw", new Uint8Array(dataObj.dhKeyPair.pub), { name: "ECDH", namedCurve: "P-256" }, true, []);
@@ -301,13 +405,13 @@ async function loadPersistedKeys() {
     }
 }
 
-// --- WebCrypto ---
+// ============ WebCrypto ============
 async function deriveSharedSecret(keyPair, peerPublicKey) {
     return await crypto.subtle.deriveKey(
         { name: "ECDH", public: peerPublicKey },
         keyPair.privateKey,
         { name: "AES-GCM", length: 256 },
-        true, // Allow extraction to save to localStorage
+        true,
         ["encrypt", "decrypt"]
     );
 }
@@ -324,21 +428,21 @@ async function decryptPayload(secretKey, payload) {
     return new TextDecoder().decode(dec);
 }
 
-// --- AM Proto ---
+// ============ AM Proto ============
 function buildPacket(command, target, sender, payloadString) {
     const payloadBuffer = new TextEncoder().encode(payloadString);
     const payloadLength = payloadBuffer.length;
     const buffer = new ArrayBuffer(16 + payloadLength);
     const view = new DataView(buffer);
     const u8 = new Uint8Array(buffer);
-    
+
     view.setUint8(0, 2);
     view.setUint8(1, command);
     view.setUint16(2, payloadLength, false);
     view.setUint32(4, Math.floor(Math.random() * 0xFFFFFFFF), false);
     view.setUint32(8, target, false);
     view.setUint32(12, sender, false);
-    
+
     u8.set(payloadBuffer, 16);
     return u8;
 }
@@ -358,165 +462,221 @@ function obfuscate(u8) {
 }
 function deobfuscate(u8) { return obfuscate(u8); }
 
-// --- State Management ---
+// ============ State Management ============
 function getOrCreateChat(peerId) {
     if (!chats.has(peerId)) {
         chats.set(peerId, {
             peerId: peerId,
-            username: `User ${peerId}`, // fallback
+            username: `User ${peerId}`,
             dhKeyPair: null,
             sharedSecretKey: null,
             messages: [],
             unreadCount: 0,
-            isSecure: false
+            isSecure: false,
+            typing: false
         });
         renderChatList();
     }
     return chats.get(peerId);
 }
 
-// --- UI Logic ---
-document.getElementById('btn-new-chat').onclick = async () => {
-    const username = document.getElementById('new-chat-input').value.trim();
-    if (!username || username === myUsername) return;
-    document.getElementById('new-chat-input').value = '';
-    
-    // Send resolve request to server
-    const resolvePacket = buildPacket(CMD_RESOLVE, 0, myId, username);
-    ws.send(obfuscate(resolvePacket));
-};
+function groupAvatarHTML(chat) {
+    const members = (chat.members || []).slice(0, 4);
+    const cells = members.map(id => {
+        const name = id === myId ? myUsername : (chats.get(id)?.username || `User ${id}`);
+        return `<span style="background:${avatarColor(name)}">${initials(name)}</span>`;
+    }).join('');
+    return `<div class="group-avatar-grid">${cells || '<span></span>'}</div>`;
+}
 
+// ============ Chat List ============
 function renderChatList() {
     const list = document.getElementById('chat-list');
     list.innerHTML = '';
-    
+
     chats.forEach(chat => {
         const item = document.createElement('div');
         item.className = `chat-item ${currentActiveChat === chat.peerId ? 'active' : ''}`;
-        
-        let lastMsg = chat.messages.length > 0 ? chat.messages[chat.messages.length - 1].text : (chat.isSecure ? 'Secure Tunnel Ready' : 'Connecting...');
-        
+
+        const last = chat.messages.length ? chat.messages[chat.messages.length - 1] : null;
+        const lastTime = last ? formatListTime(last.time) : '';
+
+        let preview;
+        if (chat.typing) preview = `<span class="typing-text">typing...</span>`;
+        else if (last) preview = `${chat.isGroup && last.senderUsername ? escapeHtml(last.senderUsername) + ': ' : ''}${escapeHtml(last.text)}`;
+        else if (chat.isGroup) preview = 'Space created';
+        else if (chat.isSecure) preview = 'Encrypted chat';
+        else preview = 'Connecting...';
+
+        const receipt = last && last.type === 'sent'
+            ? `<span class="receipt ${last.isRead ? 'seen' : ''}">${whisperIconSVG}</span>` : '';
+        const badge = chat.unreadCount > 0 ? `<span class="unread-badge">${chat.unreadCount}</span>` : '';
+        const memberChip = chat.isGroup ? `<span class="member-chip">${chat.members.length} members</span>` : '';
+
         item.innerHTML = `
-            <div class="chat-info">
-                <h4>${chat.username}</h4>
-                <p>${lastMsg}</p>
+            <div class="chat-avatar" style="background:${avatarColor(chat.username)}">
+                ${chat.isGroup ? groupAvatarHTML(chat) : initials(chat.username)}
+                <span class="online-dot"></span>
             </div>
-            ${chat.unreadCount > 0 ? `<span class="unread-badge">${chat.unreadCount}</span>` : ''}
+            <div class="chat-info">
+                <div class="chat-line1"><h4>${escapeHtml(chat.username)}${memberChip}</h4><span class="chat-time">${lastTime}</span></div>
+                <div class="chat-line2"><p>${preview}</p>${receipt}${badge}</div>
+            </div>
         `;
-        
+
         item.onclick = () => openChat(chat.peerId);
         list.appendChild(item);
     });
 }
 
+// ============ Chat Header / Open ============
 function openChat(peerId) {
     currentActiveChat = peerId;
     const chat = chats.get(peerId);
-    
+    if (!chat) return;
+
     document.getElementById('empty-state').style.display = 'none';
     document.getElementById('main-chat-area').style.display = 'flex';
-    document.getElementById('chat-title').innerText = `${chat.username}`;
-    
-    if (chat.unreadCount > 0) {
+    document.getElementById('chat-title').innerText = chat.username;
+
+    const headerAvatar = document.getElementById('header-avatar');
+    headerAvatar.innerText = chat.isGroup ? '' : initials(chat.username);
+    headerAvatar.style.background = avatarColor(chat.username);
+
+    if (chat.isGroup) {
+        document.getElementById('crypto-status').innerText = `${chat.members.length} members`;
+        document.getElementById('crypto-status').className = 'status-text text-muted';
+    } else if (chat.isSecure) {
+        document.getElementById('crypto-status').innerText = 'Online';
+        document.getElementById('crypto-status').className = 'status-text text-success';
+    } else {
+        document.getElementById('crypto-status').innerText = 'Connecting...';
+        document.getElementById('crypto-status').className = 'status-text text-muted';
+    }
+
+    if (chat.unreadCount > 0 && !chat.isGroup) {
         const readPacket = buildPacket(CMD_READ, peerId, myId, "");
         ws.send(obfuscate(readPacket));
         chat.unreadCount = 0;
     }
-    
-    renderChatList(); 
+
+    renderChatList();
     renderMessages(peerId);
-    
+
     const input = document.getElementById('msg-input');
     const btn = document.getElementById('btn-send');
     if (chat.isSecure) {
-        document.getElementById('crypto-status').innerText = 'Secure E2EE Tunnel';
-        document.getElementById('crypto-status').className = 'status-text text-success';
-        document.getElementById('e2e-badge').style.opacity = '1';
         input.disabled = false;
         btn.disabled = false;
+        input.placeholder = "Type an encrypted message...";
         input.focus();
+    } else if (chat.isGroup) {
+        if (chat.isFeed && chat.creatorId !== myId) {
+            input.disabled = true;
+            btn.disabled = true;
+            input.placeholder = "This is a broadcast Feed. Only admins can post.";
+        } else {
+            input.disabled = false;
+            btn.disabled = false;
+            input.placeholder = chat.isFeed ? "Broadcast to Feed..." : "Message group...";
+            input.focus();
+        }
     } else {
-        document.getElementById('crypto-status').innerText = 'Waiting for peer...';
-        document.getElementById('crypto-status').className = 'status-text text-muted';
-        document.getElementById('e2e-badge').style.opacity = '0.5';
         input.disabled = true;
         btn.disabled = true;
+        input.placeholder = "Connecting...";
     }
 }
 
-const whisperIconSVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9 C 8 11, 8 13, 6 15" /><path d="M11 5 C 15 9, 15 15, 11 19" /><path d="M16 1 C 22 7, 22 17, 16 23" /></svg>`;
-
+// ============ Messages ============
 function renderMessages(peerId) {
     const container = document.getElementById('messages');
     const chat = chats.get(peerId);
-    container.innerHTML = chat.isSecure ? `<div class="message-wrapper system"><div class="message system"><span class="msg-content">End-to-End Encryption established with ${chat.username}</span></div></div>` : '';
-    
+    container.innerHTML = '';
+
+    let lastDay = null;
     chat.messages.forEach(msg => {
-        const wrapper = document.createElement('div');
-        wrapper.className = `message-wrapper ${msg.type}`;
-
-        const div = document.createElement('div');
-        div.className = `message`; 
-        if(msg.type === 'system') div.classList.add('system');
-        else if (msg.type === 'sent') div.classList.add('sent');
-        else if (msg.type === 'received') div.classList.add('received');
-        
-        const contentSpan = document.createElement('span');
-        contentSpan.className = 'msg-content';
-        contentSpan.innerText = msg.text;
-        div.appendChild(contentSpan);
-        
-        wrapper.appendChild(div);
-
-        if (msg.type === 'sent') {
-            const statusSpan = document.createElement('span');
-            statusSpan.className = 'read-status' + (msg.isRead ? ' seen' : '');
-            statusSpan.innerHTML = whisperIconSVG;
-            wrapper.appendChild(statusSpan);
+        const day = msg.time ? new Date(msg.time).toDateString() : '';
+        if (day && day !== lastDay) {
+            const divider = document.createElement('div');
+            divider.className = 'date-divider';
+            divider.innerText = dateLabel(msg.time);
+            container.appendChild(divider);
+            lastDay = day;
         }
-        
+
+        const wrapper = document.createElement('div');
+        wrapper.className = `message-row ${msg.type}`;
+
+        if (msg.type === 'system') {
+            wrapper.classList.add('system');
+            wrapper.innerHTML = `<div class="date-divider">${escapeHtml(msg.text)}</div>`;
+        } else if (msg.type === 'received') {
+            const name = chat.isGroup ? (msg.senderUsername || chat.username) : chat.username;
+            wrapper.innerHTML = `
+                <div class="row-avatar" style="background:${avatarColor(name)}">${initials(name)}</div>
+                <div class="row-main">
+                    ${chat.isGroup ? `<span class="sender-name" style="color:${avatarColor(msg.senderUsername || chat.username)}">${escapeHtml(msg.senderUsername || chat.username)}</span>` : ''}
+                    <div class="bubble received">${escapeHtml(msg.text)}</div>
+                    <span class="msg-time">${formatTime(msg.time)}</span>
+                </div>
+            `;
+        } else {
+            // Sent message — bubble + badge seen indicator overlapping corner
+            wrapper.innerHTML = `
+                <div class="sent-group">
+                    <div class="bubble sent">${escapeHtml(msg.text)}
+                        <span class="msg-time-inside">${formatTime(msg.time)}</span>
+                    </div>
+                    <span class="receipt-badge ${msg.isRead ? 'seen' : ''}">${whisperIconSVG}</span>
+                </div>
+            `;
+        }
+
         container.appendChild(wrapper);
     });
-    
+
     container.scrollTop = container.scrollHeight;
 }
 
-let typingTimeout = null;
-function showTypingIndicator() {
-    let indicator = document.getElementById('typing-indicator');
-    if (!indicator) {
-        indicator = document.createElement('div');
-        indicator.id = 'typing-indicator';
-        indicator.className = 'typing-indicator';
-        indicator.innerHTML = '<span></span><span></span><span></span>';
-    }
-    
-    const container = document.getElementById('messages');
-    indicator.style.display = 'flex';
-    container.appendChild(indicator);
-    container.scrollTop = container.scrollHeight;
-    
-    clearTimeout(typingTimeout);
-    typingTimeout = setTimeout(() => {
-        indicator.style.display = 'none';
-    }, 1500);
-}
+// ============ New Chat ============
+document.getElementById('btn-new-chat').onclick = () => {
+    const username = document.getElementById('new-chat-input').value.trim();
+    if (!username || username === myUsername) return;
+    document.getElementById('new-chat-input').value = '';
 
+    const resolvePacket = buildPacket(CMD_RESOLVE, 0, myId, username);
+    ws.send(obfuscate(resolvePacket));
+};
+document.getElementById('new-chat-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') document.getElementById('btn-new-chat').click();
+});
+
+// ============ Send ============
 document.getElementById('btn-send').onclick = async () => {
     if (!currentActiveChat) return;
     const chat = chats.get(currentActiveChat);
     const input = document.getElementById('msg-input');
     const text = input.value.trim();
-    if (!text || !chat.isSecure) return;
-    
+    if (!text || (!chat.isSecure && !chat.isGroup)) return;
+
     input.value = '';
-    
-    chat.messages.push({ text, type: 'sent', isRead: false });
-    await persistKeys(); // Save sent message to local storage
-    
+
+    if (chat.isGroup) {
+        chat.messages.push({ senderId: myId, senderUsername: myUsername, text, type: 'sent', isRead: true, time: Date.now() });
+        renderMessages(currentActiveChat);
+        renderChatList();
+        const packet = buildPacket(CMD_GROUP_MSG, 0, myId, JSON.stringify({ groupId: chat.groupId, text }));
+        ws.send(obfuscate(packet));
+        return;
+    }
+
+    chat.messages.push({ text, type: 'sent', isRead: false, time: Date.now() });
+    await persistKeys();
+
     renderMessages(currentActiveChat);
     renderChatList();
-    
+
     const encryptedPayload = await encryptPayload(chat.sharedSecretKey, text);
     const encPacket = buildPacket(CMD_ENC_MSG, currentActiveChat, myId, JSON.stringify(encryptedPayload));
     ws.send(obfuscate(encPacket));
@@ -530,12 +690,214 @@ let lastTypingSent = 0;
 document.getElementById('msg-input').addEventListener('input', () => {
     if (!currentActiveChat) return;
     const chat = chats.get(currentActiveChat);
-    if (!chat.isSecure) return;
-    
+    if (!chat.isSecure || chat.isGroup) return;
+
     const now = Date.now();
     if (now - lastTypingSent > 500) {
         lastTypingSent = now;
         const typingPacket = buildPacket(CMD_TYPING, currentActiveChat, myId, "");
         ws.send(obfuscate(typingPacket));
     }
+});
+
+// ============ Typing Indicator (in-chat) ============
+let typingTimeout = null;
+function showTypingIndicator() {
+    const container = document.getElementById('messages');
+    let indicator = document.getElementById('typing-indicator');
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'typing-indicator';
+        indicator.className = 'typing-indicator';
+        indicator.innerHTML = '<span></span><span></span><span></span>';
+        container.appendChild(indicator);
+    }
+    indicator.style.display = 'flex';
+    container.scrollTop = container.scrollHeight;
+
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => { indicator.style.display = 'none'; }, 1500);
+}
+
+// ============ Groups ============
+document.getElementById('my-avatar').onclick = (e) => {
+    e.stopPropagation();
+    const popover = document.getElementById('profile-popover');
+    popover.style.display = popover.style.display === 'none' ? 'flex' : 'none';
+};
+document.addEventListener('click', () => {
+    const popover = document.getElementById('profile-popover');
+    if (popover) popover.style.display = 'none';
+});
+
+document.getElementById('btn-logout').onclick = () => {
+    localStorage.removeItem('whispr_session');
+    location.reload();
+};
+
+// ============ Groups & Feeds (Side Panels) ============
+let pendingSpaceMembers = [];
+let pendingFeedAvatar = null;
+let pendingSpaceAvatar = null;
+
+let currentCropper = null;
+let activeCropCallback = null;
+let activeCropElementId = null;
+
+function setupImagePicker(elementId, callback) {
+    document.getElementById(elementId).onclick = () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const b64 = ev.target.result;
+                openCropModal(b64, elementId, callback);
+            };
+            reader.readAsDataURL(file);
+        };
+        input.click();
+    };
+}
+
+function openCropModal(imageSrc, elementId, callback) {
+    const cropModal = document.getElementById('crop-modal');
+    const container = document.getElementById('croppie-container');
+    
+    cropModal.style.display = 'flex';
+    
+    // Cleanup old croppie instance
+    if (currentCropper) {
+        currentCropper.destroy();
+        currentCropper = null;
+    }
+    
+    // Initialize Croppie
+    currentCropper = new Croppie(container, {
+        viewport: { width: 256, height: 256, type: 'circle' },
+        boundary: { width: '100%', height: 300 },
+        showZoomer: true,
+        enableOrientation: true
+    });
+    
+    currentCropper.bind({
+        url: imageSrc
+    });
+    
+    activeCropCallback = callback;
+    activeCropElementId = elementId;
+}
+
+document.getElementById('btn-apply-crop').onclick = () => {
+    if (!currentCropper) return;
+    
+    currentCropper.result({
+        type: 'base64',
+        size: 'viewport',
+        format: 'png',
+        circle: false // Croppie natively handles the circular crop if viewport is circle and format is png
+    }).then(function (croppedB64) {
+        document.getElementById(activeCropElementId).style.backgroundImage = `url(${croppedB64})`;
+        document.getElementById(activeCropElementId).innerHTML = ''; // hide camera icon
+        
+        if (activeCropCallback) activeCropCallback(croppedB64);
+        
+        closeCropModal();
+    });
+};
+
+document.getElementById('btn-cancel-crop').onclick = () => {
+    closeCropModal();
+};
+
+function closeCropModal() {
+    document.getElementById('crop-modal').style.display = 'none';
+    if (currentCropper) {
+        currentCropper.destroy();
+        currentCropper = null;
+    }
+}
+
+setupImagePicker('feed-avatar-picker', (b64) => pendingFeedAvatar = b64);
+setupImagePicker('space-avatar-picker', (b64) => pendingSpaceAvatar = b64);
+
+document.getElementById('btn-new-space').onclick = () => {
+    const listEl = document.getElementById('space-member-list');
+    listEl.innerHTML = '';
+    chats.forEach(chat => {
+        if (chat.isGroup || chat.peerId === myId) return;
+        const row = document.createElement('label');
+        row.className = 'group-member';
+        row.innerHTML = `
+            <input type="checkbox" value="${chat.peerId}">
+            <span class="gm-avatar" style="background:${avatarColor(chat.username)}">${initials(chat.username)}</span>
+            <span class="gm-name">${escapeHtml(chat.username)}</span>
+        `;
+        listEl.appendChild(row);
+    });
+    document.getElementById('panel-space-step1').classList.add('active');
+};
+
+document.getElementById('btn-space-next').onclick = () => {
+    pendingSpaceMembers = Array.from(document.querySelectorAll('#space-member-list input:checked')).map(cb => parseInt(cb.value));
+    
+    // Populate selected members list for step 2
+    const selEl = document.getElementById('space-selected-members');
+    selEl.innerHTML = '';
+    pendingSpaceMembers.forEach(id => {
+        const chat = chats.get(id);
+        if(chat) {
+            selEl.innerHTML += `<div style="font-size:13px; margin-bottom:4px;">${escapeHtml(chat.username)}</div>`;
+        }
+    });
+
+    document.getElementById('panel-space-step2').classList.add('active');
+};
+
+document.getElementById('btn-create-space-fab').onclick = () => {
+    const name = document.getElementById('space-name').value.trim() || 'New Space';
+    const description = document.getElementById('space-desc').value.trim();
+    
+    const payload = { name, members: pendingSpaceMembers, description, avatarUrl: pendingSpaceAvatar };
+    const packet = buildPacket(CMD_GROUP_CREATE, 0, myId, JSON.stringify(payload));
+    ws.send(obfuscate(packet));
+
+    // Close panels
+    document.getElementById('panel-space-step1').classList.remove('active');
+    document.getElementById('panel-space-step2').classList.remove('active');
+};
+
+document.getElementById('btn-new-feed').onclick = () => {
+    document.getElementById('feed-name').value = '';
+    document.getElementById('feed-desc').value = '';
+    pendingFeedAvatar = null;
+    document.getElementById('feed-avatar-picker').style.backgroundImage = 'none';
+    document.getElementById('feed-avatar-picker').innerHTML = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>`;
+    
+    document.getElementById('panel-new-feed').classList.add('active');
+};
+
+document.getElementById('btn-create-feed-fab').onclick = () => {
+    const name = document.getElementById('feed-name').value.trim() || 'New Feed';
+    const description = document.getElementById('feed-desc').value.trim();
+    
+    const payload = { name, members: [], isFeed: true, description, avatarUrl: pendingFeedAvatar };
+    const packet = buildPacket(CMD_GROUP_CREATE, 0, myId, JSON.stringify(payload));
+    ws.send(obfuscate(packet));
+
+    document.getElementById('panel-new-feed').classList.remove('active');
+};
+
+// Back Buttons
+document.getElementById('btn-back-feed').onclick = () => document.getElementById('panel-new-feed').classList.remove('active');
+document.getElementById('btn-back-space1').onclick = () => document.getElementById('panel-space-step1').classList.remove('active');
+document.getElementById('btn-back-space2').onclick = () => document.getElementById('panel-space-step2').classList.remove('active');
+
+// ============ Nav placeholders ============
+['btn-logo', 'btn-chats', 'btn-files', 'btn-contacts', 'btn-notifications', 'btn-settings', 'btn-filter'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('click', () => console.log(`[Nav] ${id} clicked`));
 });

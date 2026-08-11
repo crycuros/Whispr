@@ -27,6 +27,24 @@ namespace WhisprDesktop
             InitializeComponent();
         }
 
+        // ── Window Chrome ──────────────────────────────────────
+        private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ClickCount == 2)
+                WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+            else
+                DragMove();
+        }
+        private void BtnMinimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+        private void BtnMaximize_Click(object sender, RoutedEventArgs e) =>
+            WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+        private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
+
+        private void TxtAddPeer_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter) BtnAddPeer_Click(sender, e);
+        }
+
         private async Task EnsureConnectedAsync()
         {
             if (_ws != null) return;
@@ -83,7 +101,9 @@ namespace WhisprDesktop
                         MainAppPanel.Visibility = Visibility.Visible;
                         TxtMyUsername.Text = _myUsername;
                         MyAvatarBorder.Background = AvatarHelper.GetBrush(_myUsername);
+                        MyAvatarTextSide.Text = AvatarHelper.GetInitial(_myUsername);
                         MyAvatarText.Text = AvatarHelper.GetInitial(_myUsername);
+                        EmptyState.Visibility = Visibility.Visible;
 
                         _chats = await StorageHelper.LoadChatsAsync();
                         // Always reset E2EE state on login — must do fresh handshake each session
@@ -216,7 +236,13 @@ namespace WhisprDesktop
                         if (chat == null) return;
 
                         foreach (var m in chat.Messages)
-                            if (m.Type == "sent") m.IsRead = true;
+                        {
+                            if (m.Type == "sent" && !m.IsRead)
+                            {
+                                m.IsRead = true;
+                                m.JustRead = true;
+                            }
+                        }
 
                         await StorageHelper.SaveChatsAsync(_chats);
                         if (_currentChatUsername == chat.Username) RenderMessages();
@@ -245,23 +271,31 @@ namespace WhisprDesktop
             if (ListChats.SelectedItem is ChatData chat)
             {
                 _currentChatUsername = chat.Username;
+                EmptyState.Visibility = Visibility.Collapsed;
                 ChatAreaPanel.Visibility = Visibility.Visible;
-                TxtCurrentChat.Text = chat.Username;
-                ChatAvatarBorder.Background = AvatarHelper.GetBrush(chat.Username);
-                TxtChatAvatar.Text = AvatarHelper.GetInitial(chat.Username);
+                TxtCurrentChat.Text = chat.IsGroup ? $"{chat.Username}  ·  👥 {chat.Members.Count}" : chat.Username;
+                ChatAvatarBorder.Child = AvatarHelper.BuildAvatarElement(chat, 40);
 
-                TxtE2EEStatus.Text = chat.IsSecure ? "End-to-end encrypted" : "Establishing secure connection...";
-                TxtE2EEStatus.Foreground = new SolidColorBrush(chat.IsSecure
-                    ? (Color)ColorConverter.ConvertFromString("#4CAF50")
-                    : (Color)ColorConverter.ConvertFromString("#8A9197"));
+                if (chat.IsGroup)
+                {
+                    TxtE2EEStatus.Text = "Group chat  ·  End-to-end encrypted";
+                    TxtE2EEStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#22C55E"));
+                }
+                else
+                {
+                    TxtE2EEStatus.Text = chat.IsSecure ? "End-to-end encrypted" : "Establishing secure connection...";
+                    TxtE2EEStatus.Foreground = new SolidColorBrush(chat.IsSecure
+                        ? (Color)ColorConverter.ConvertFromString("#22C55E")
+                        : (Color)ColorConverter.ConvertFromString("#9BA3AF"));
+                }
 
                 // Opening the chat marks the peer's messages as seen
-                if (_ws != null && _myId != 0 && chat.TargetId != 0)
+                if (_ws != null && _myId != 0 && chat.TargetId != 0 && chat.UnreadCount > 0)
                 {
                     var readPacket = AMProto.BuildPacket(AMProto.CMD_READ, chat.TargetId, _myId, "");
                     await _ws.SendPacketAsync(readPacket);
+                    chat.UnreadCount = 0;
                 }
-                chat.UnreadCount = 0;
 
                 RenderMessages();
             }
@@ -273,14 +307,26 @@ namespace WhisprDesktop
             if (_currentChatUsername == null) return;
             
             var chat = _chats[_currentChatUsername];
-            var bubbleTextBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1A1A1A"));
+            // Yellow theme: sent bubbles are yellow with dark text, received are white cards with shadow
+            var sentTextBrush  = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1A1A1A"));
+            var recvTextBrush  = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1A1A1A"));
+            var sentBubbleBg   = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFB800"));
+            var recvBubbleBg   = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FFFFFF"));
+            var bubbleShadow   = new DropShadowEffect
+            {
+                Color = (Color)ColorConverter.ConvertFromString("#000000"),
+                BlurRadius = 12,
+                ShadowDepth = 2,
+                Direction = 270,
+                Opacity = 0.12
+            };
 
             foreach (var msg in chat.Messages)
             {
                 var wrapper = new StackPanel
                 {
-                    MaxWidth = 430,
-                    Margin = new Thickness(6, 2, 6, 2),
+                    MaxWidth = 440,
+                    Margin = new Thickness(6, 3, 6, 3),
                     HorizontalAlignment = msg.Type == "sent" ? HorizontalAlignment.Right : HorizontalAlignment.Left
                 };
 
@@ -288,51 +334,86 @@ namespace WhisprDesktop
                 {
                     Text = msg.Text,
                     TextWrapping = TextWrapping.Wrap,
-                    Foreground = bubbleTextBrush,
-                    FontSize = 14
+                    Foreground = msg.Type == "sent" ? sentTextBrush : recvTextBrush,
+                    FontSize = 14,
+                    LineHeight = 20
                 };
 
                 if (msg.Type == "sent")
                 {
+                    // Use a Grid to allow the badge to overlap the bubble
+                    var sentGroup = new Grid
+                    {
+                        Margin = new Thickness(0, 0, 10, 10) // Leave space for overlapping badge
+                    };
+
                     var bubble = new Border
                     {
                         Padding = new Thickness(12, 8, 12, 8),
-                        CornerRadius = new CornerRadius(16, 16, 4, 16),
-                        Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#EFFDDE"))
+                        CornerRadius = new CornerRadius(18, 18, 4, 18),
+                        Background = sentBubbleBg
                     };
 
                     var inner = new StackPanel();
                     inner.Children.Add(tb);
 
-                    var meta = new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        Margin = new Thickness(0, 4, 0, 0)
-                    };
                     var time = new TextBlock
                     {
                         Text = FormatTime(msg.Timestamp),
                         FontSize = 11,
-                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#B6BEC7")),
-                        VerticalAlignment = VerticalAlignment.Center
+                        Foreground = new SolidColorBrush(Color.FromArgb(115, 0, 0, 0)), // rgba(0,0,0,0.45)
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        Margin = new Thickness(0, 4, 0, 0)
                     };
-                    meta.Children.Add(time);
-                    meta.Children.Add(BuildReadStatusIcon(msg.IsRead));
-
-                    inner.Children.Add(meta);
+                    inner.Children.Add(time);
                     bubble.Child = inner;
-                    wrapper.Children.Add(bubble);
+                    
+                    sentGroup.Children.Add(bubble);
+
+                    // Add the seen badge overlapping the bottom-left corner
+                    var badge = BuildReadStatusIcon(msg);
+                    badge.HorizontalAlignment = HorizontalAlignment.Left;
+                    badge.VerticalAlignment = VerticalAlignment.Bottom;
+                    badge.Margin = new Thickness(-8, 0, 0, -8); // Offset to overlap on left
+                    
+                    sentGroup.Children.Add(badge);
+                    wrapper.Children.Add(sentGroup);
                 }
-                else
+                else if (msg.Type == "received")
                 {
+                    var inner = new StackPanel();
+
+                    if (chat.IsGroup && !string.IsNullOrEmpty(msg.Sender))
+                    {
+                        var senderLabel = new TextBlock
+                        {
+                            Text = msg.Sender,
+                            FontSize = 11,
+                            FontWeight = FontWeights.SemiBold,
+                            Foreground = AvatarHelper.GetBrush(msg.Sender),
+                            Margin = new Thickness(2, 0, 0, 3)
+                        };
+                        inner.Children.Add(senderLabel);
+                    }
+
                     var bubble = new Border
                     {
                         Padding = new Thickness(12, 8, 12, 8),
-                        CornerRadius = new CornerRadius(16, 16, 16, 4),
-                        Background = new SolidColorBrush(Colors.White)
+                        CornerRadius = new CornerRadius(4, 18, 18, 18),
+                        Background = recvBubbleBg,
+                        Effect = bubbleShadow
                     };
-                    bubble.Child = tb;
+                    inner.Children.Add(tb);
+                    var time = new TextBlock
+                    {
+                        Text = FormatTime(msg.Timestamp),
+                        FontSize = 11,
+                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#9BA3AF")),
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        Margin = new Thickness(0, 4, 0, 0)
+                    };
+                    inner.Children.Add(time);
+                    bubble.Child = inner;
                     wrapper.Children.Add(bubble);
                 }
 
@@ -344,41 +425,93 @@ namespace WhisprDesktop
         private static string FormatTime(DateTime t)
         {
             if (t == default) return "";
-            return t.ToString("HH:mm");
+            return t.ToString("h:mm tt").ToLowerInvariant();
         }
 
-        // Matches the whisper SVG used in the web frontend (app.js whisperIconSVG)
-        private Path BuildReadStatusIcon(bool isRead)
+        // Matches the whisper SVG badge used in the web frontend
+        private FrameworkElement BuildReadStatusIcon(MessageData msg)
         {
-            var color = isRead
-                ? (Color)ColorConverter.ConvertFromString("#3390EC")
-                : (Color)ColorConverter.ConvertFromString("#B6BEC7");
+            var isRead = msg.IsRead;
+            var iconColor = isRead
+                ? (Color)ColorConverter.ConvertFromString("#FFB800")
+                : Color.FromArgb(115, 255, 255, 255); // rgba(255,255,255,0.45)
 
-            var icon = new Path
+            var badgeBgColor = isRead
+                ? Colors.White
+                : Color.FromArgb(64, 200, 200, 200); // rgba(200,200,200,0.25)
+
+            var badgeBorderColor = isRead
+                ? Color.FromArgb(153, 255, 255, 255) // rgba(255,255,255,0.6)
+                : Color.FromArgb(51, 255, 255, 255); // rgba(255,255,255,0.2)
+
+            var path = new Path
             {
                 Data = Geometry.Parse("M 6,9 C 8,11 8,13 6,15 M 11,5 C 15,9 15,15 11,19 M 16,1 C 22,7 22,17 16,23"),
-                Stroke = new SolidColorBrush(color),
-                StrokeThickness = 2.5,
+                Stroke = new SolidColorBrush(iconColor),
+                StrokeThickness = 2.8,
                 StrokeStartLineCap = PenLineCap.Round,
                 StrokeEndLineCap = PenLineCap.Round,
                 Stretch = Stretch.Uniform,
-                Width = 14,
-                Height = 14,
-                Margin = new Thickness(2, 0, 0, 0)
+                Width = 10,
+                Height = 10,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            var badge = new Border
+            {
+                Width = 20,
+                Height = 20,
+                CornerRadius = new CornerRadius(10),
+                Background = new SolidColorBrush(badgeBgColor),
+                BorderBrush = new SolidColorBrush(badgeBorderColor),
+                BorderThickness = new Thickness(1),
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                RenderTransform = new ScaleTransform(1, 1),
+                Child = path
             };
 
             if (isRead)
             {
-                icon.Effect = new DropShadowEffect
+                // Match Photoshop shadow: Opacity 57%, Distance 1, Spread 2, Size 2
+                var shadow = new System.Windows.Media.Effects.DropShadowEffect
                 {
-                    Color = (Color)ColorConverter.ConvertFromString("#3390EC"),
-                    BlurRadius = 6,
-                    ShadowDepth = 0,
-                    Opacity = 0.6
+                    Color = Colors.Black,
+                    BlurRadius = 2,
+                    ShadowDepth = 1,
+                    Direction = -30, // 30 degrees angle
+                    Opacity = 0.57
                 };
+                badge.Effect = shadow;
             }
 
-            return icon;
+            if (msg.JustRead)
+            {
+                var sb = new System.Windows.Media.Animation.Storyboard();
+                var ease = new System.Windows.Media.Animation.BackEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut, Amplitude = 0.8 };
+                
+                var scaleX = new System.Windows.Media.Animation.DoubleAnimation { From = 0.6, To = 1.05, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = ease };
+                var scaleY = new System.Windows.Media.Animation.DoubleAnimation { From = 0.6, To = 1.05, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = ease };
+                
+                System.Windows.Media.Animation.Storyboard.SetTarget(scaleX, badge);
+                System.Windows.Media.Animation.Storyboard.SetTargetProperty(scaleX, new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleX)"));
+                System.Windows.Media.Animation.Storyboard.SetTarget(scaleY, badge);
+                System.Windows.Media.Animation.Storyboard.SetTargetProperty(scaleY, new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleY)"));
+                
+                sb.Children.Add(scaleX);
+                sb.Children.Add(scaleY);
+                
+                badge.Loaded += (s, e) => sb.Begin();
+                msg.JustRead = false;
+            }
+            else if (isRead)
+            {
+                // If it was already read before, set it to the resting scaled state
+                ((ScaleTransform)badge.RenderTransform).ScaleX = 1.05;
+                ((ScaleTransform)badge.RenderTransform).ScaleY = 1.05;
+            }
+
+            return badge;
         }
 
         private void UpdateChatList()
