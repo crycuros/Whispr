@@ -527,6 +527,38 @@ function renderChatList() {
         item.onclick = () => openChat(chat.peerId);
         list.appendChild(item);
     });
+
+    renderRecentSearches();
+}
+
+function renderRecentSearches() {
+    const list = document.getElementById('recent-searches-list');
+    if (!list) return;
+    list.innerHTML = '';
+    
+    let count = 0;
+    // Map entries are usually in insertion order, we just take the first few as "recents"
+    for (const [peerId, chat] of chats) {
+        if (count >= 10) break; // show up to 10 recents
+        
+        const item = document.createElement('div');
+        item.className = 'recent-user-item';
+        
+        item.innerHTML = `
+            <div class="recent-avatar" style="background-color: ${avatarColor(chat.username)};">
+                ${chat.isGroup ? groupAvatarHTML(chat) : `<span>${initials(chat.username)}</span>`}
+            </div>
+            <span class="recent-name">${escapeHtml(chat.username)}</span>
+        `;
+        
+        item.onclick = () => {
+            openChat(peerId);
+            document.getElementById('btn-back-search').click();
+        };
+        
+        list.appendChild(item);
+        count++;
+    }
 }
 
 // ============ Chat Header / Open ============
