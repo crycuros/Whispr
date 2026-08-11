@@ -736,6 +736,8 @@ if (savedColor) {
     document.documentElement.style.setProperty('--accent', savedColor);
     // Simple light variant (opacity)
     document.documentElement.style.setProperty('--accent-light', savedColor + '40');
+    // Hover variant (opacity)
+    document.documentElement.style.setProperty('--accent-hover', savedColor + 'dd');
     colorSwatches.forEach(s => {
         s.classList.toggle('active', s.dataset.color === savedColor);
     });
@@ -762,6 +764,7 @@ colorSwatches.forEach(swatch => {
         const color = swatch.dataset.color;
         document.documentElement.style.setProperty('--accent', color);
         document.documentElement.style.setProperty('--accent-light', color + '40');
+        document.documentElement.style.setProperty('--accent-hover', color + 'dd');
         localStorage.setItem('whispr_accent_color', color);
         
         colorSwatches.forEach(s => s.classList.remove('active'));
