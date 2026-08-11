@@ -2,11 +2,11 @@
     --bg: #FAFAF8;
     --sidebar: #FFFFFF;
     --nav-rail: #111111;
-    --nav-icon: #6B7280;
+    --nav-icon: #747474;
     --nav-icon-hover: #FFFFFF;
-    --nav-icon-active: #FFB800;
-    --nav-hover-bg: rgba(255, 255, 255, 0.08);
-    --sent-bubble: #FFB800;
+    --nav-icon-active: var(--accent);
+    --nav-hover-bg: color-mix(in srgb, white 8%, transparent);
+    --sent-bubble: var(--accent);
     --sent-text: #1A1A1A;
     --sent-timestamp: #8C6200;
     --recv-bubble: #FFFFFF;
@@ -19,13 +19,15 @@
     --accent-pressed: #CC9500;
     --accent-light: #FFF3CC;
     --accent-pale: #FFFAED;
-    --green: #22C55E;
+    --green: #297A4A;
     --divider: #E5E7EB;
+    --border: rgba(0,0,0,0.08);
     --hover: #FFFAED;
-    --selected: #FFF3CC;
+    --selected: color-mix(in srgb, var(--accent) 15%, transparent);
     --input-bg: #F3F4F6;
-    --read-seen: #FFB800;
+    --read-seen: var(--accent);
     --read-sent: #9BA3AF;
+    --danger: #E06C75;
     --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.06);
     --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.12);
     --bubble-radius: 18px;
@@ -110,10 +112,6 @@ input { font-family: inherit; }
     align-items: center;
     flex-shrink: 0;
     box-shadow: var(--shadow-lg);
-    overflow-y: auto;
-}
-.nav-rail::-webkit-scrollbar {
-    display: none; /* Hide scrollbar for a cleaner look */
 }
 .nav-top, .nav-bottom {
     display: flex;
@@ -205,7 +203,7 @@ input { font-family: inherit; }
     outline: none;
     transition: box-shadow 0.15s ease;
 }
-.panel-search input:focus { box-shadow: 0 0 0 2px rgba(255, 184, 0, 0.35); }
+.panel-search input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
 .panel-search button {
     width: 38px; height: 38px;
     border-radius: 50%;
@@ -313,13 +311,13 @@ input { font-family: inherit; }
     width: 22px;
     height: 22px;
     border-radius: 50%;
-    background: rgba(255,255,255,0.18);
+    background: color-mix(in srgb, white 18%, transparent);
     flex-shrink: 0;
     transition: all 0.25s ease;
 }
 .receipt.seen {
     background: #FFFFFF;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.18), 0 0 0 2px rgba(255,255,255,0.4);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18), 0 0 0 2px color-mix(in srgb, white 40%, transparent);
 }
 .unread-badge {
     min-width: 20px;
@@ -570,7 +568,7 @@ input { font-family: inherit; }
     width: 20px; /* Make smaller */
     height: 20px;
     border-radius: 50%;
-    background: rgba(200, 200, 200, 0.25);
+    background: color-mix(in srgb, white 25%, #c8c8c8);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -582,7 +580,7 @@ input { font-family: inherit; }
 .receipt-badge.seen {
     background: #FFFFFF;
     border-color: #FFFFFF;
-    color: #FFB800;
+    color: var(--accent);
     /* Match Photoshop shadow: Opacity 57%, Distance 1, Spread 2, Size 2 */
     box-shadow: 1px 1px 2px 0 rgba(0, 0, 0, 0.57);
 }
@@ -602,8 +600,8 @@ input { font-family: inherit; }
     align-self: flex-end;
 }
 .msg-meta .receipt.seen {
-    color: #FFB800;
-    filter: drop-shadow(0 0 3px rgba(255,184,0,0.6));
+    color: var(--accent);
+    filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 60%, transparent));
 }
 
 /* Voice message placeholder */
@@ -706,7 +704,7 @@ input { font-family: inherit; }
     outline: none;
     transition: box-shadow 0.15s ease;
 }
-.input-area input:focus { box-shadow: 0 0 0 2px rgba(255, 184, 0, 0.35); }
+.input-area input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
 .input-area input:disabled { opacity: 0.6; }
 #btn-send {
     width: 44px; height: 44px;
@@ -787,7 +785,7 @@ input { font-family: inherit; }
     font-size: 14px;
     transition: box-shadow 0.15s ease;
 }
-.auth-box input:focus { box-shadow: 0 0 0 2px rgba(255, 184, 0, 0.35); }
+.auth-box input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
 .auth-buttons { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
 .btn-primary {
     background: var(--accent);
@@ -811,9 +809,9 @@ input { font-family: inherit; }
     font-weight: 600;
     transition: background 0.2s ease;
 }
-.btn-secondary:hover { background: rgba(255, 184, 0, 0.08); }
+.btn-secondary:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .auth-error {
-    background: rgba(239, 68, 68, 0.1);
+    background: color-mix(in srgb, #ef4444 10%, transparent);
     color: #ef4444;
     padding: 10px;
     border-radius: 8px;
