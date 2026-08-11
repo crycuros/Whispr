@@ -788,7 +788,7 @@ function savePreferences() {
     applyPreferences(myPreferences);
     
     // Save to backend instantly
-    const updatePacket = buildPacket(CMD_USER_UPDATE, 0, myId, { preferences: myPreferences });
+    const updatePacket = buildPacket(CMD_USER_UPDATE, 0, myId, JSON.stringify({ preferences: myPreferences }));
     if (myId) ws.send(obfuscate(updatePacket));
 }
 
@@ -946,7 +946,7 @@ colorSwatches.forEach(swatch => {
         applyThemeColor(color);
         
         // Save to backend instantly
-        const updatePacket = buildPacket(CMD_USER_UPDATE, 0, myId, { themeColor: color });
+        const updatePacket = buildPacket(CMD_USER_UPDATE, 0, myId, JSON.stringify({ themeColor: color }));
         ws.send(obfuscate(updatePacket));
     });
 });
@@ -958,10 +958,10 @@ setupImagePicker('settings-avatar-picker', (croppedB64) => {
 
 document.getElementById('btn-save-profile').addEventListener('click', () => {
     const bio = document.getElementById('settings-bio').value;
-    const updatePacket = buildPacket(AMProto.CMD_USER_UPDATE, 0, myId, {
+    const updatePacket = buildPacket(CMD_USER_UPDATE, 0, myId, JSON.stringify({
         avatarUrl: pendingSpaceAvatar,
         bio: bio
-    });
+    }));
     ws.send(obfuscate(updatePacket));
     
     // Optimistic UI close
