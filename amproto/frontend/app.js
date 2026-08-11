@@ -722,6 +722,71 @@ searchTabs.forEach(tab => {
 });
 
 // =======================
+// USER SETTINGS PANEL
+// =======================
+const settingsPanel = document.getElementById('panel-settings');
+const btnSettings = document.getElementById('btn-settings');
+const btnBackSettings = document.getElementById('btn-back-settings');
+const btnLogout = document.getElementById('btn-settings-logout');
+const colorSwatches = document.querySelectorAll('.color-swatch');
+
+// Load saved color
+const savedColor = localStorage.getItem('whispr_accent_color');
+if (savedColor) {
+    document.documentElement.style.setProperty('--accent', savedColor);
+    // Simple light variant (opacity)
+    document.documentElement.style.setProperty('--accent-light', savedColor + '40');
+    colorSwatches.forEach(s => {
+        s.classList.toggle('active', s.dataset.color === savedColor);
+    });
+}
+
+btnSettings.addEventListener('click', () => {
+    document.getElementById('settings-display-name').value = myUsername;
+    // We don't have bio or avatar URL loaded yet on client side, but we will soon
+    settingsPanel.classList.add('active');
+});
+
+btnBackSettings.addEventListener('click', () => {
+    settingsPanel.classList.remove('active');
+});
+
+btnLogout.addEventListener('click', () => {
+    localStorage.removeItem('whispr_session');
+    location.reload();
+});
+
+// Appearance changes
+colorSwatches.forEach(swatch => {
+    swatch.addEventListener('click', () => {
+        const color = swatch.dataset.color;
+        document.documentElement.style.setProperty('--accent', color);
+        document.documentElement.style.setProperty('--accent-light', color + '40');
+        localStorage.setItem('whispr_accent_color', color);
+        
+        colorSwatches.forEach(s => s.classList.remove('active'));
+        swatch.classList.add('active');
+    });
+});
+
+// Profile Pic Picker
+setupImagePicker('settings-avatar-picker', (croppedB64) => {
+    pendingSpaceAvatar = croppedB64; // Reuse variable or just hold it
+});
+
+document.getElementById('btn-save-profile').addEventListener('click', () => {
+    const bio = document.getElementById('settings-bio').value;
+    const updatePacket = buildPacket(AMProto.CMD_USER_UPDATE, 0, myId, {
+        avatarUrl: pendingSpaceAvatar,
+        bio: bio
+    });
+    ws.send(obfuscate(updatePacket));
+    
+    // Optimistic UI close
+    settingsPanel.classList.remove('active');
+});
+
+// =======================
 // SIDE PANELS (NEW GROUP / FEED)
 // =======================
 document.getElementById('btn-send').onclick = async () => {

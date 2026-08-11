@@ -1000,6 +1000,84 @@ input { font-family: inherit; }
     max-width: 60px;
 }
 
+/* ============ SETTINGS PANEL ============ */
+.settings-profile-section {
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-divider {
+    height: 1px;
+    background: rgba(0,0,0,0.05);
+    margin: 8px 0;
+}
+
+.settings-section-title {
+    margin: 16px 20px 8px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.settings-appearance-section {
+    padding: 12px 20px;
+}
+
+.color-swatches {
+    display: flex;
+    gap: 12px;
+}
+
+.color-swatch {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s;
+}
+
+.color-swatch:hover {
+    transform: scale(1.1);
+}
+
+.color-swatch.active {
+    border-color: white;
+    box-shadow: 0 0 0 2px var(--accent-light);
+    transform: scale(1.1);
+}
+
+.settings-account-section {
+    padding: 12px 20px;
+}
+
+.settings-action-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-hover);
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.settings-action-btn:hover {
+    background: rgba(0,0,0,0.05);
+}
+
+.settings-action-btn.text-danger {
+    color: #ef4444;
+}
+.settings-action-btn.text-danger:hover {
+    background: #fef2f2;
+}
+
 .side-panel-header h3 {
     font-size: 16px;
     font-weight: 600;

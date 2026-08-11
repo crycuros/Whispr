@@ -63,8 +63,6 @@
                     <div class="profile-popover" id="profile-popover" style="display: none;">
                         <button class="popover-item" id="btn-new-space">New Space</button>
                         <button class="popover-item" id="btn-new-feed">New Feed</button>
-                        <div class="popover-divider"></div>
-                        <button class="popover-item text-danger" id="btn-logout">Log Out</button>
                     </div>
                 </div>
             </div>
@@ -119,6 +117,50 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- USER SETTINGS PANEL -->
+            <div class="side-panel" id="panel-settings">
+                <div class="side-panel-header">
+                    <button class="back-btn" id="btn-back-settings">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h3>Settings</h3>
+                </div>
+                <div class="side-panel-content">
+                    <div class="settings-profile-section">
+                        <div class="avatar-uploader" id="settings-avatar-picker" style="width: 100px; height: 100px; margin: 0 auto 16px auto; border-radius: 50%; box-shadow: var(--shadow-md);">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                        </div>
+                        <input type="text" class="panel-input" id="settings-display-name" placeholder="Display Name" style="text-align: center; font-weight: 600; font-size: 18px;" disabled>
+                        <textarea class="panel-textarea" id="settings-bio" placeholder="Add a bio..." rows="2" style="text-align: center; margin-top: 8px;"></textarea>
+                        <button class="btn-primary" id="btn-save-profile" style="width: 100%; margin-top: 16px;">Save Profile</button>
+                    </div>
+
+                    <div class="settings-divider"></div>
+                    
+                    <h4 class="settings-section-title">Appearance</h4>
+                    <div class="settings-appearance-section">
+                        <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 12px;">Accent Color</p>
+                        <div class="color-swatches">
+                            <button class="color-swatch active" data-color="#facc15" style="background-color: #facc15;"></button>
+                            <button class="color-swatch" data-color="#3b82f6" style="background-color: #3b82f6;"></button>
+                            <button class="color-swatch" data-color="#10b981" style="background-color: #10b981;"></button>
+                            <button class="color-swatch" data-color="#8b5cf6" style="background-color: #8b5cf6;"></button>
+                            <button class="color-swatch" data-color="#f43f5e" style="background-color: #f43f5e;"></button>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-divider"></div>
+
+                    <div class="settings-account-section">
+                        <button class="settings-action-btn text-danger" id="btn-settings-logout">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                            Log Out
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div class="side-panel" id="panel-new-feed">
                 <div class="side-panel-header">
                     <button class="back-btn" id="btn-back-feed">

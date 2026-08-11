@@ -28,6 +28,10 @@ class AMProto {
     static CMD_GROUP_INFO_OK = 0x16;
     static CMD_GROUP_READ = 0x19;
     
+    // User commands
+    static CMD_USER_UPDATE = 0x20;
+    static CMD_USER_UPDATE_OK = 0x21;
+    
     // Obfuscation Mask (Simple XOR to hide the header from DPI)
     // In production, this would be a dynamic AES-CTR stream like MTProto FakeTLS.
     static OBFUSCATION_KEY = 0xAB;

@@ -34,6 +34,10 @@ db.serialize(() => {
     db.run(`ALTER TABLE groups ADD COLUMN is_feed INTEGER DEFAULT 0`, (err) => { /* ignore error */ });
     db.run(`ALTER TABLE groups ADD COLUMN description TEXT`, (err) => { /* ignore error */ });
     db.run(`ALTER TABLE groups ADD COLUMN avatar_url TEXT`, (err) => { /* ignore error */ });
+    
+    // Add profile fields to users
+    db.run(`ALTER TABLE users ADD COLUMN avatar_url TEXT`, (err) => { /* ignore error */ });
+    db.run(`ALTER TABLE users ADD COLUMN bio TEXT`, (err) => { /* ignore error */ });
     db.run(`CREATE TABLE IF NOT EXISTS group_members (
         group_id INTEGER NOT NULL,
         user_id INTEGER NOT NULL,
@@ -267,6 +271,16 @@ wss.on('connection', (ws) => {
                     ON CONFLICT(group_id, user_id) DO UPDATE SET last_read = max(last_read, excluded.last_read)
                 `, [groupId, packet.senderId, lastReadMsgId], (err) => {
                     if (err) console.error("Error upserting group_read", err);
+                });
+            } else if (packet.command === AMProto.CMD_USER_UPDATE) {
+                const { avatarUrl, bio } = JSON.parse(packet.payloadString);
+                db.run(`UPDATE users SET avatar_url = ?, bio = ? WHERE id = ?`, [avatarUrl, bio, packet.senderId], (err) => {
+                    if (err) {
+                        console.error("Error updating user", err);
+                    } else {
+                        const okPacket = AMProto.buildPacket(AMProto.CMD_USER_UPDATE_OK, packet.senderId, 0, JSON.stringify({ success: true, avatarUrl, bio }));
+                        ws.send(AMProto.obfuscate(okPacket));
+                    }
                 });
             } else {
                 // Relay other commands (DH_INIT, DH_REPLY, TYPING, READ)
