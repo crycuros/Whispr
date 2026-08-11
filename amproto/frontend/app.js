@@ -621,7 +621,7 @@ function openChat(peerId) {
         input.disabled = false;
         btn.disabled = false;
         input.placeholder = "Type an encrypted message...";
-        input.focus();
+        input.focus({ preventScroll: true });
     } else if (chat.isGroup) {
         if (chat.isFeed && chat.creatorId !== myId) {
             input.disabled = true;
@@ -631,7 +631,7 @@ function openChat(peerId) {
             input.disabled = false;
             btn.disabled = false;
             input.placeholder = chat.isFeed ? "Broadcast to Feed..." : "Message group...";
-            input.focus();
+            input.focus({ preventScroll: true });
         }
     } else {
         input.disabled = true;
