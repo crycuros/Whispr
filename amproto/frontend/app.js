@@ -777,18 +777,88 @@ function savePreferences() {
     
     // Save to backend instantly
     const updatePacket = buildPacket(CMD_USER_UPDATE, 0, myId, { preferences: myPreferences });
-    ws.send(obfuscate(updatePacket));
+    if (myId) ws.send(obfuscate(updatePacket));
 }
+
+function updateCustomSelectUI(select) {
+    if (!select) return;
+    const wrapper = select.previousElementSibling;
+    if (wrapper && wrapper.classList.contains('custom-select-wrapper')) {
+        const selectedOpt = select.options[select.selectedIndex];
+        if (selectedOpt) {
+            wrapper.querySelector('.custom-select-trigger span').innerText = selectedOpt.text;
+            wrapper.querySelectorAll('.custom-option').forEach(o => {
+                o.classList.toggle('selected', o.dataset.value === select.value);
+            });
+        }
+    }
+}
+
+function initCustomSelects() {
+    document.querySelectorAll('.settings-select').forEach(select => {
+        select.style.display = 'none';
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = 'custom-select-wrapper';
+        
+        const trigger = document.createElement('div');
+        trigger.className = 'custom-select-trigger';
+        
+        const selectedOpt = select.options[select.selectedIndex];
+        trigger.innerHTML = `<span>${selectedOpt ? selectedOpt.text : ''}</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+        
+        const optionsDiv = document.createElement('div');
+        optionsDiv.className = 'custom-options';
+        
+        Array.from(select.options).forEach((opt, idx) => {
+            const optDiv = document.createElement('div');
+            optDiv.className = 'custom-option';
+            optDiv.dataset.value = opt.value;
+            optDiv.innerText = opt.text;
+            
+            if (idx === select.selectedIndex) optDiv.classList.add('selected');
+            
+            optDiv.addEventListener('click', (e) => {
+                e.stopPropagation();
+                select.value = opt.value;
+                select.dispatchEvent(new Event('change'));
+                
+                trigger.querySelector('span').innerText = opt.text;
+                optionsDiv.querySelectorAll('.custom-option').forEach(o => o.classList.remove('selected'));
+                optDiv.classList.add('selected');
+                optionsDiv.classList.remove('open');
+            });
+            optionsDiv.appendChild(optDiv);
+        });
+        
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.querySelectorAll('.custom-options').forEach(o => {
+                if (o !== optionsDiv) o.classList.remove('open');
+            });
+            optionsDiv.classList.toggle('open');
+        });
+        
+        wrapper.appendChild(trigger);
+        wrapper.appendChild(optionsDiv);
+        select.parentNode.insertBefore(wrapper, select);
+    });
+    
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.custom-options').forEach(o => o.classList.remove('open'));
+    });
+}
+initCustomSelects();
 
 function applyPreferences(prefs) {
     if (!prefs) return;
     
     // UI Elements Sync
-    if (prefs.theme) prefTheme.value = prefs.theme;
-    if (prefs.display) prefDisplay.value = prefs.display;
+    if (prefs.theme) { prefTheme.value = prefs.theme; updateCustomSelectUI(prefTheme); }
+    if (prefs.display) { prefDisplay.value = prefs.display; updateCustomSelectUI(prefDisplay); }
     if (prefs.fontScale) prefFontScale.value = prefs.fontScale;
     if (prefs.msgSpace) prefMsgSpace.value = prefs.msgSpace;
-    if (prefs.zoom) prefZoom.value = prefs.zoom;
+    if (prefs.zoom) { prefZoom.value = prefs.zoom; updateCustomSelectUI(prefZoom); }
     if (prefs.embeds !== undefined) prefEmbeds.checked = prefs.embeds;
     if (prefs.reactions !== undefined) prefReactions.checked = prefs.reactions;
     if (prefs.autoplayGif !== undefined) prefAutoplayGif.checked = prefs.autoplayGif;

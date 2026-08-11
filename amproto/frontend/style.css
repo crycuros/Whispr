@@ -1159,6 +1159,66 @@ input { font-family: inherit; }
     cursor: pointer;
 }
 
+/* Custom Select & Preview */
+.settings-preview-box {
+    background: var(--bg);
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+}
+.custom-select-wrapper {
+    position: relative;
+    user-select: none;
+    width: 140px;
+}
+.custom-select-trigger {
+    background: var(--input-bg);
+    border: 1px solid var(--divider);
+    color: var(--text-primary);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.custom-options {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--input-bg);
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+    margin-top: 4px;
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+}
+.custom-options.open {
+    display: flex;
+}
+.custom-option {
+    padding: 8px 12px;
+    font-size: 14px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.custom-option:hover {
+    background: var(--hover);
+}
+.custom-option.selected {
+    background: var(--accent);
+    color: #1a1a1a;
+}
+
 .settings-slider {
     width: 130px;
     accent-color: var(--accent);
