@@ -257,6 +257,18 @@ ws.onmessage = async (event) => {
             renderChatList();
             if (currentActiveChat === sender) openChat(sender);
         }
+        else if (packet.command === CMD_USER_UPDATE_OK) {
+            const data = JSON.parse(packet.payloadString);
+            if (data.avatarUrl !== undefined) {
+                myAvatarUrl = data.avatarUrl;
+                const avatar = document.getElementById('my-avatar');
+                if (myAvatarUrl) {
+                    avatar.innerHTML = `<img src="${myAvatarUrl}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+                    avatar.style.background = 'transparent';
+                }
+            }
+            if (data.bio !== undefined) myBio = data.bio;
+        }
         else if (packet.command === CMD_ENC_MSG) {
             let chat = getOrCreateChat(sender);
             if (!chat.sharedSecretKey) return;
