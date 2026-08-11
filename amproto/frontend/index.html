@@ -138,9 +138,17 @@
 
                     <div class="settings-divider"></div>
                     
-                    <h4 class="settings-section-title">Appearance</h4>
-                    <div class="settings-appearance-section">
-                        <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 12px;">Accent Color</p>
+                    <div class="settings-group">
+                        <div class="settings-group-title">Theme</div>
+                        <div class="settings-row">
+                            <span class="settings-label">Color Theme</span>
+                            <select class="settings-select" id="pref-theme">
+                                <option value="light">Light</option>
+                                <option value="dark">Dark</option>
+                                <option value="amoled">AMOLED</option>
+                            </select>
+                        </div>
+                        <p style="color: var(--text-secondary); font-size: 13px; margin: 12px 0;">Accent Color</p>
                         <div class="color-swatches">
                             <button class="color-swatch active" data-color="#facc15" style="background-color: #facc15;"></button>
                             <button class="color-swatch" data-color="#3b82f6" style="background-color: #3b82f6;"></button>
@@ -149,10 +157,57 @@
                             <button class="color-swatch" data-color="#f43f5e" style="background-color: #f43f5e;"></button>
                         </div>
                     </div>
+
+                    <div class="settings-divider"></div>
                     
+                    <div class="settings-group">
+                        <div class="settings-group-title">Message Display</div>
+                        <div class="settings-row">
+                            <span class="settings-label">Layout</span>
+                            <select class="settings-select" id="pref-display">
+                                <option value="cozy">Cozy</option>
+                                <option value="compact">Compact</option>
+                            </select>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">Chat Font Scaling</span>
+                            <input type="range" class="settings-slider" id="pref-font-scale" min="12" max="24" value="15" step="1">
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">Message Spacing</span>
+                            <input type="range" class="settings-slider" id="pref-msg-space" min="0" max="24" value="12" step="4">
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">Zoom Level</span>
+                            <input type="range" class="settings-slider" id="pref-zoom" min="0.8" max="1.5" value="1" step="0.1">
+                        </div>
+                    </div>
+
+                    <div class="settings-divider"></div>
+                    
+                    <div class="settings-group">
+                        <div class="settings-group-title">Accessibility & Visuals</div>
+                        <div class="settings-row">
+                            <span class="settings-label">Show Embeds & Previews</span>
+                            <input type="checkbox" class="settings-toggle" id="pref-embeds" checked>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">Show Emoji Reactions</span>
+                            <input type="checkbox" class="settings-toggle" id="pref-reactions" checked>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">Automatically play GIFs</span>
+                            <input type="checkbox" class="settings-toggle" id="pref-autoplay-gif" checked>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">Reduced Motion</span>
+                            <input type="checkbox" class="settings-toggle" id="pref-reduced-motion">
+                        </div>
+                    </div>
+
                     <div class="settings-divider"></div>
 
-                    <div class="settings-account-section">
+                    <div class="settings-group">
                         <button class="settings-action-btn text-danger" id="btn-settings-logout">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
                             Log Out

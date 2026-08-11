@@ -171,6 +171,10 @@ ws.onmessage = async (event) => {
             if (data.themeColor) {
                 applyThemeColor(data.themeColor);
             }
+            
+            // Sync all preferences
+            myPreferences = data.preferences || {};
+            applyPreferences(myPreferences);
 
             const avatar = document.getElementById('my-avatar');
             if (myAvatarUrl) {
@@ -745,6 +749,64 @@ const btnSettings = document.getElementById('btn-settings');
 const btnBackSettings = document.getElementById('btn-back-settings');
 const btnLogout = document.getElementById('btn-settings-logout');
 const colorSwatches = document.querySelectorAll('.color-swatch');
+
+// New Preferences inputs
+const prefTheme = document.getElementById('pref-theme');
+const prefDisplay = document.getElementById('pref-display');
+const prefFontScale = document.getElementById('pref-font-scale');
+const prefMsgSpace = document.getElementById('pref-msg-space');
+const prefZoom = document.getElementById('pref-zoom');
+const prefEmbeds = document.getElementById('pref-embeds');
+const prefReactions = document.getElementById('pref-reactions');
+const prefAutoplayGif = document.getElementById('pref-autoplay-gif');
+const prefReducedMotion = document.getElementById('pref-reduced-motion');
+
+function savePreferences() {
+    myPreferences = {
+        theme: prefTheme.value,
+        display: prefDisplay.value,
+        fontScale: prefFontScale.value,
+        msgSpace: prefMsgSpace.value,
+        zoom: prefZoom.value,
+        embeds: prefEmbeds.checked,
+        reactions: prefReactions.checked,
+        autoplayGif: prefAutoplayGif.checked,
+        reducedMotion: prefReducedMotion.checked
+    };
+    applyPreferences(myPreferences);
+    
+    // Save to backend instantly
+    const updatePacket = buildPacket(CMD_USER_UPDATE, 0, myId, { preferences: myPreferences });
+    ws.send(obfuscate(updatePacket));
+}
+
+function applyPreferences(prefs) {
+    if (!prefs) return;
+    
+    // UI Elements Sync
+    if (prefs.theme) prefTheme.value = prefs.theme;
+    if (prefs.display) prefDisplay.value = prefs.display;
+    if (prefs.fontScale) prefFontScale.value = prefs.fontScale;
+    if (prefs.msgSpace) prefMsgSpace.value = prefs.msgSpace;
+    if (prefs.zoom) prefZoom.value = prefs.zoom;
+    if (prefs.embeds !== undefined) prefEmbeds.checked = prefs.embeds;
+    if (prefs.reactions !== undefined) prefReactions.checked = prefs.reactions;
+    if (prefs.autoplayGif !== undefined) prefAutoplayGif.checked = prefs.autoplayGif;
+    if (prefs.reducedMotion !== undefined) prefReducedMotion.checked = prefs.reducedMotion;
+
+    // DOM & CSS Var overrides
+    document.body.dataset.theme = prefs.theme || 'light';
+    document.body.dataset.display = prefs.display || 'cozy';
+    document.body.dataset.reducedMotion = prefs.reducedMotion || false;
+    
+    if (prefs.fontScale) document.documentElement.style.setProperty('--chat-font-size', prefs.fontScale + 'px');
+    if (prefs.msgSpace) document.documentElement.style.setProperty('--chat-msg-spacing', prefs.msgSpace + 'px');
+    if (prefs.zoom) document.documentElement.style.setProperty('--app-zoom', prefs.zoom);
+}
+
+[prefTheme, prefDisplay].forEach(el => el.addEventListener('change', savePreferences));
+[prefFontScale, prefMsgSpace, prefZoom].forEach(el => el.addEventListener('input', savePreferences));
+[prefEmbeds, prefReactions, prefAutoplayGif, prefReducedMotion].forEach(el => el.addEventListener('change', savePreferences));
 
 function applyThemeColor(color) {
     document.documentElement.style.setProperty('--accent', color);
