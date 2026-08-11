@@ -84,7 +84,70 @@
                 <!-- Dynamic chat list items will appear here -->
             </div>
 
-            <!-- FEED CREATION PANEL -->
+            <!-- GLOBAL SEARCH PANEL -->
+            <div class="side-panel" id="panel-global-search">
+                <div class="search-panel-header">
+                    <button class="back-btn" id="btn-back-search">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <input type="text" class="global-search-input" id="global-search-input" placeholder="Search..." autocomplete="off">
+                </div>
+                <div class="search-tabs-container">
+                    <button class="search-tab active">All</button>
+                    <button class="search-tab">Chats</button>
+                    <button class="search-tab">Spaces</button>
+                    <button class="search-tab">Feeds</button>
+                    <button class="search-tab">Media</button>
+                    <button class="search-tab">Links</button>
+                    <button class="search-tab">Files</button>
+                </div>
+                <div class="side-panel-content search-panel-content" style="padding-top: 0;">
+                    <!-- RECENT SECTION -->
+                    <div class="recent-searches-section">
+                        <h4 class="section-title">Recent</h4>
+                        <div class="recent-users-scroll">
+                            <div class="recent-user-item">
+                                <div class="recent-avatar" style="background-color: var(--accent);">
+                                    <span>J</span>
+                                </div>
+                                <span class="recent-name">Jessie</span>
+                            </div>
+                            <div class="recent-user-item">
+                                <div class="recent-avatar" style="background-color: #3b82f6;">
+                                    <span>W</span>
+                                </div>
+                                <span class="recent-name">Walter</span>
+                            </div>
+                            <div class="recent-user-item">
+                                <div class="recent-avatar" style="background-color: #10b981;">
+                                    <span>S</span>
+                                </div>
+                                <span class="recent-name">Saul G.</span>
+                            </div>
+                            <div class="recent-user-item">
+                                <div class="recent-avatar" style="background-color: #8b5cf6;">
+                                    <span>M</span>
+                                </div>
+                                <span class="recent-name">Mike</span>
+                            </div>
+                            <div class="recent-user-item">
+                                <div class="recent-avatar" style="background-color: #f59e0b;">
+                                    <span>G</span>
+                                </div>
+                                <span class="recent-name">Gus</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- SEARCH RESULTS (Empty by default) -->
+                    <div class="search-results-section" id="global-search-results">
+                        <!-- Dynamic results will populate here based on typing -->
+                        <div style="text-align: center; color: var(--text-secondary); margin-top: 40px; font-size: 14px;">
+                            Start typing to search
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="side-panel" id="panel-new-feed">
                 <div class="side-panel-header">
                     <button class="back-btn" id="btn-back-feed">

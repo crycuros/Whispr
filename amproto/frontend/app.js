@@ -652,7 +652,46 @@ document.getElementById('new-chat-input').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') document.getElementById('btn-new-chat').click();
 });
 
-// ============ Send ============
+// =======================
+// GLOBAL SEARCH PANEL
+// =======================
+const searchPanel = document.getElementById('panel-global-search');
+const btnBackSearch = document.getElementById('btn-back-search');
+const mainSearchInput = document.getElementById('new-chat-input');
+const globalSearchInput = document.getElementById('global-search-input');
+const searchTabs = document.querySelectorAll('.search-tab');
+
+mainSearchInput.addEventListener('focus', () => {
+    searchPanel.classList.add('active');
+    setTimeout(() => {
+        globalSearchInput.focus();
+    }, 300); // Wait for slide animation
+});
+
+btnBackSearch.addEventListener('click', () => {
+    searchPanel.classList.remove('active');
+    globalSearchInput.value = ''; // clear search
+    mainSearchInput.blur(); // remove focus from main search to allow clicking it again
+});
+
+// Close search on escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && searchPanel.classList.contains('active')) {
+        btnBackSearch.click();
+    }
+});
+
+searchTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+        searchTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        // Future logic: Filter search results based on tab selection
+    });
+});
+
+// =======================
+// SIDE PANELS (NEW GROUP / FEED)
+// =======================
 document.getElementById('btn-send').onclick = async () => {
     if (!currentActiveChat) return;
     const chat = chats.get(currentActiveChat);
