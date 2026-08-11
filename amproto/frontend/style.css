@@ -951,7 +951,7 @@ input { font-family: inherit; }
 .recent-users-scroll {
     display: flex;
     overflow-x: auto;
-    padding: 0 20px 10px 20px;
+    padding: 4px 20px 10px 20px; /* Added 4px top padding to prevent hover clipping */
     gap: 16px;
 }
 
