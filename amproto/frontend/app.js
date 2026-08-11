@@ -26,12 +26,16 @@ const CMD_GROUP_MSG = 0x13;
 const CMD_GROUP_MSG_RELAY = 0x14;
 const CMD_GROUP_INFO_OK = 0x16;
 const CMD_GROUP_READ = 0x19;
+const CMD_USER_UPDATE = 0x20;
+const CMD_USER_UPDATE_OK = 0x21;
 
 const AVATAR_PALETTE = ['#3390EC', '#297A4A', '#E06C75', '#8E6CD6', '#F08C3A', '#43A09E', '#7090C6', '#B76CE8'];
 
 let myId = null;
 let myUsername = null;
 let myPasswordHash = null;
+let myAvatarUrl = null;
+let myBio = '';
 
 const chats = new Map(); // peerId -> Chat Object
 let currentActiveChat = null;
@@ -160,10 +164,22 @@ ws.onmessage = async (event) => {
             const data = JSON.parse(packet.payloadString);
             myId = data.userId;
             myUsername = data.username;
+            myAvatarUrl = data.avatarUrl;
+            myBio = data.bio || '';
+            
+            // Sync theme color from DB
+            if (data.themeColor) {
+                applyThemeColor(data.themeColor);
+            }
 
             const avatar = document.getElementById('my-avatar');
-            avatar.innerText = initials(myUsername);
-            avatar.style.background = avatarColor(myUsername);
+            if (myAvatarUrl) {
+                avatar.innerHTML = `<img src="${myAvatarUrl}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+                avatar.style.background = 'transparent';
+            } else {
+                avatar.innerText = initials(myUsername);
+                avatar.style.background = avatarColor(myUsername);
+            }
 
             const toast = document.getElementById('update-toast');
             if (toast && toast.style.display !== 'none') {
@@ -730,22 +746,30 @@ const btnBackSettings = document.getElementById('btn-back-settings');
 const btnLogout = document.getElementById('btn-settings-logout');
 const colorSwatches = document.querySelectorAll('.color-swatch');
 
-// Load saved color
-const savedColor = localStorage.getItem('whispr_accent_color');
-if (savedColor) {
-    document.documentElement.style.setProperty('--accent', savedColor);
-    // Simple light variant (opacity)
-    document.documentElement.style.setProperty('--accent-light', savedColor + '40');
-    // Hover variant (opacity)
-    document.documentElement.style.setProperty('--accent-hover', savedColor + 'dd');
+function applyThemeColor(color) {
+    document.documentElement.style.setProperty('--accent', color);
+    document.documentElement.style.setProperty('--accent-light', color + '40');
+    document.documentElement.style.setProperty('--accent-hover', color + 'dd');
+    localStorage.setItem('whispr_accent_color', color);
+    
     colorSwatches.forEach(s => {
-        s.classList.toggle('active', s.dataset.color === savedColor);
+        s.classList.toggle('active', s.dataset.color === color);
     });
 }
 
+// Load saved color initially for fast boot, but server might override on login
+const savedColor = localStorage.getItem('whispr_accent_color');
+if (savedColor) applyThemeColor(savedColor);
+
 btnSettings.addEventListener('click', () => {
     document.getElementById('settings-display-name').value = myUsername;
-    // We don't have bio or avatar URL loaded yet on client side, but we will soon
+    document.getElementById('settings-bio').value = myBio;
+    
+    const avatarPicker = document.getElementById('settings-avatar-picker');
+    if (myAvatarUrl) {
+        avatarPicker.innerHTML = `<img src="${myAvatarUrl}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+    }
+    
     settingsPanel.classList.add('active');
 });
 
@@ -762,13 +786,11 @@ btnLogout.addEventListener('click', () => {
 colorSwatches.forEach(swatch => {
     swatch.addEventListener('click', () => {
         const color = swatch.dataset.color;
-        document.documentElement.style.setProperty('--accent', color);
-        document.documentElement.style.setProperty('--accent-light', color + '40');
-        document.documentElement.style.setProperty('--accent-hover', color + 'dd');
-        localStorage.setItem('whispr_accent_color', color);
+        applyThemeColor(color);
         
-        colorSwatches.forEach(s => s.classList.remove('active'));
-        swatch.classList.add('active');
+        // Save to backend instantly
+        const updatePacket = buildPacket(CMD_USER_UPDATE, 0, myId, { themeColor: color });
+        ws.send(obfuscate(updatePacket));
     });
 });
 

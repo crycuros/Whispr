@@ -38,6 +38,7 @@ db.serialize(() => {
     // Add profile fields to users
     db.run(`ALTER TABLE users ADD COLUMN avatar_url TEXT`, (err) => { /* ignore error */ });
     db.run(`ALTER TABLE users ADD COLUMN bio TEXT`, (err) => { /* ignore error */ });
+    db.run(`ALTER TABLE users ADD COLUMN theme_color TEXT`, (err) => { /* ignore error */ });
     db.run(`CREATE TABLE IF NOT EXISTS group_members (
         group_id INTEGER NOT NULL,
         user_id INTEGER NOT NULL,
@@ -113,7 +114,7 @@ wss.on('connection', (ws) => {
             } else if (packet.command === AMProto.CMD_LOGIN) {
                 try {
                     const { username, password } = JSON.parse(packet.payloadString);
-                    db.get(`SELECT id, username FROM users WHERE username = ? AND password = ?`, [username, password], (err, row) => {
+                    db.get(`SELECT id, username, avatar_url, bio, theme_color FROM users WHERE username = ? AND password = ?`, [username, password], (err, row) => {
                         if (err || !row) {
                             const errPacket = AMProto.buildPacket(AMProto.CMD_ERROR, packet.senderId, 0, JSON.stringify({ message: 'Login failed' }));
                             ws.send(AMProto.obfuscate(errPacket));
@@ -121,7 +122,13 @@ wss.on('connection', (ws) => {
                             myId = row.id;
                             clients.set(myId, ws);
                             console.log(`[Server] Web Client ID ${myId} logged in`);
-                            const okPacket = AMProto.buildPacket(AMProto.CMD_LOGIN_OK, packet.senderId, 0, JSON.stringify({ userId: myId, username: row.username }));
+                            const okPacket = AMProto.buildPacket(AMProto.CMD_LOGIN_OK, packet.senderId, 0, JSON.stringify({ 
+                                userId: myId, 
+                                username: row.username,
+                                avatarUrl: row.avatar_url,
+                                bio: row.bio,
+                                themeColor: row.theme_color
+                            }));
                             ws.send(AMProto.obfuscate(okPacket));
                             
                             // Send unread messages
@@ -273,15 +280,29 @@ wss.on('connection', (ws) => {
                     if (err) console.error("Error upserting group_read", err);
                 });
             } else if (packet.command === AMProto.CMD_USER_UPDATE) {
-                const { avatarUrl, bio } = JSON.parse(packet.payloadString);
-                db.run(`UPDATE users SET avatar_url = ?, bio = ? WHERE id = ?`, [avatarUrl, bio, packet.senderId], (err) => {
-                    if (err) {
-                        console.error("Error updating user", err);
-                    } else {
-                        const okPacket = AMProto.buildPacket(AMProto.CMD_USER_UPDATE_OK, packet.senderId, 0, JSON.stringify({ success: true, avatarUrl, bio }));
-                        ws.send(AMProto.obfuscate(okPacket));
-                    }
-                });
+                const { avatarUrl, bio, themeColor } = JSON.parse(packet.payloadString);
+                
+                // If fields are undefined, keep existing data (for partial updates like just color)
+                const updates = [];
+                const params = [];
+                if (avatarUrl !== undefined) { updates.push('avatar_url = ?'); params.push(avatarUrl); }
+                if (bio !== undefined) { updates.push('bio = ?'); params.push(bio); }
+                if (themeColor !== undefined) { updates.push('theme_color = ?'); params.push(themeColor); }
+                
+                if (updates.length > 0) {
+                    params.push(packet.senderId);
+                    db.run(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params, (err) => {
+                        if (err) {
+                            console.error("Error updating user", err);
+                        } else {
+                            const okPacket = AMProto.buildPacket(AMProto.CMD_USER_UPDATE_OK, packet.senderId, 0, JSON.stringify({ success: true, avatarUrl, bio, themeColor }));
+                            ws.send(AMProto.obfuscate(okPacket));
+                        }
+                    });
+                } else {
+                    const okPacket = AMProto.buildPacket(AMProto.CMD_USER_UPDATE_OK, packet.senderId, 0, JSON.stringify({ success: true }));
+                    ws.send(AMProto.obfuscate(okPacket));
+                }
             } else {
                 // Relay other commands (DH_INIT, DH_REPLY, TYPING, READ)
                 const targetId = packet.targetId;
