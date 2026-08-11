@@ -91,7 +91,8 @@ input { font-family: inherit; }
     display: flex;
     width: calc(100vw / var(--app-zoom));
     height: calc(100vh / var(--app-zoom));
-    zoom: var(--app-zoom);
+    transform: scale(var(--app-zoom));
+    transform-origin: top left;
     transition: opacity 0.3s ease;
 }
 .app-container.opacity-anim { opacity: 0; }
@@ -109,6 +110,10 @@ input { font-family: inherit; }
     align-items: center;
     flex-shrink: 0;
     box-shadow: var(--shadow-lg);
+    overflow-y: auto;
+}
+.nav-rail::-webkit-scrollbar {
+    display: none; /* Hide scrollbar for a cleaner look */
 }
 .nav-top, .nav-bottom {
     display: flex;
