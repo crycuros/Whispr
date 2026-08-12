@@ -32,6 +32,13 @@ class AMProto {
     static CMD_USER_UPDATE = 0x20;
     static CMD_USER_UPDATE_OK = 0x21;
     
+    // WebRTC Signaling
+    static CMD_RTC_CALL = 0x30;
+    static CMD_RTC_ANSWER = 0x31;
+    static CMD_RTC_REJECT = 0x32;
+    static CMD_RTC_END = 0x33;
+    static CMD_RTC_ICE = 0x34;
+    
     // Obfuscation Mask (Simple XOR to hide the header from DPI)
     // In production, this would be a dynamic AES-CTR stream like MTProto FakeTLS.
     static OBFUSCATION_KEY = 0xAB;
