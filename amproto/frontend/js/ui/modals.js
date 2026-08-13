@@ -251,6 +251,20 @@ export function setupModals() {
     document.getElementById('btn-back-space1').onclick = () => document.getElementById('panel-space-step1').classList.remove('active');
     document.getElementById('btn-back-space2').onclick = () => document.getElementById('panel-space-step2').classList.remove('active');
 
+    const myAvatar = document.getElementById('my-avatar');
+    const profilePopover = document.getElementById('profile-popover');
+    if (myAvatar && profilePopover) {
+        myAvatar.addEventListener('click', (e) => {
+            e.stopPropagation();
+            profilePopover.style.display = profilePopover.style.display === 'none' ? 'block' : 'none';
+        });
+        document.addEventListener('click', (e) => {
+            if (!profilePopover.contains(e.target)) {
+                profilePopover.style.display = 'none';
+            }
+        });
+    }
+
     document.getElementById('btn-apply-crop').onclick = () => {
         if (!state.currentCropper) return;
         

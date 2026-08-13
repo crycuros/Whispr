@@ -1593,3 +1593,53 @@ video {
     background: #c75b63;
 }
 
+
+/* Group & Feed UI Elements */
+.profile-popover {
+    position: absolute;
+    bottom: 0;
+    left: 60px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: var(--shadow-lg);
+    z-index: 1000;
+    width: 150px;
+    padding: 8px 0;
+}
+.popover-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 10px 16px;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+.popover-item:hover {
+    background: var(--bg-secondary);
+}
+.member-chip {
+    font-size: 11px;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    padding: 2px 6px;
+    border-radius: 12px;
+    margin-left: 8px;
+    font-weight: 500;
+}
+.feed-badge {
+    font-size: 12px;
+    margin-left: 6px;
+    cursor: help;
+}
+.sender-name {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: block;
+}
+

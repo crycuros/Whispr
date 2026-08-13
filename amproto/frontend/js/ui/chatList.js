@@ -87,13 +87,14 @@ export function renderChatList() {
             ? `<span class="receipt ${last.isRead ? 'seen' : ''}">${whisperIconSVG}</span>` : '';
         const badge = chat.unreadCount > 0 ? `<span class="unread-badge">${chat.unreadCount}</span>` : '';
         const memberChip = chat.isGroup ? `<span class="member-chip">${chat.members.length} members</span>` : '';
+        const feedBadge = chat.isFeed ? `<span class="feed-badge" title="Broadcast Feed">📢</span>` : '';
 
         item.innerHTML = `
             <div class="chat-avatar" style="background:${avatarColor(chat.username)}">
                 ${chat.isGroup ? groupAvatarHTML(chat) : initials(chat.username)}
             </div>
             <div class="chat-info">
-                <div class="chat-line1"><h4>${escapeHtml(chat.username)}${memberChip}</h4><span class="chat-time">${lastTime}</span></div>
+                <div class="chat-line1"><h4>${escapeHtml(chat.username)}${feedBadge}${memberChip}</h4><span class="chat-time">${lastTime}</span></div>
                 <div class="chat-line2"><p>${preview}</p>${receipt}${badge}</div>
             </div>
         `;
