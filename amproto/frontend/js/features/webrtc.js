@@ -10,6 +10,15 @@ let currentCallTarget = null;
 let isVideoCall = false;
 let callStartTime = null;
 
+let originalVideoTrack = null;
+let screenStream = null;
+
+let audioContext = null;
+let mediaStreamSource = null;
+let biquadFilter = null;
+let mediaStreamDestination = null;
+let originalAudioTrack = null;
+
 const configuration = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
@@ -203,10 +212,23 @@ function cleanupCall() {
         peerConnection.close();
         peerConnection = null;
     }
+    if (screenStream) {
+        screenStream.getTracks().forEach(track => track.stop());
+        screenStream = null;
+    }
+    if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+        mediaStreamSource = null;
+        biquadFilter = null;
+        mediaStreamDestination = null;
+    }
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
         localStream = null;
     }
+    originalVideoTrack = null;
+    originalAudioTrack = null;
     remoteStream = null;
     currentCallTarget = null;
 }
@@ -220,5 +242,88 @@ export function toggleAudio(enabled) {
 export function toggleVideo(enabled) {
     if (localStream) {
         localStream.getVideoTracks().forEach(t => t.enabled = enabled);
+    }
+}
+
+export async function toggleScreenShare(enable) {
+    if (!peerConnection) return;
+    
+    const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+    if (!sender) return;
+
+    if (enable) {
+        try {
+            screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            const screenTrack = screenStream.getVideoTracks()[0];
+            originalVideoTrack = sender.track;
+            
+            screenTrack.onended = () => {
+                toggleScreenShare(false);
+                document.getElementById('btn-share-screen').style.color = '';
+            };
+            
+            await sender.replaceTrack(screenTrack);
+            document.getElementById('local-video').srcObject = screenStream;
+        } catch (err) {
+            console.error('Screen sharing failed', err);
+        }
+    } else {
+        if (originalVideoTrack) {
+            await sender.replaceTrack(originalVideoTrack);
+            document.getElementById('local-video').srcObject = localStream;
+            originalVideoTrack = null;
+        }
+        if (screenStream) {
+            screenStream.getTracks().forEach(t => t.stop());
+            screenStream = null;
+        }
+    }
+}
+
+export function toggleVoiceModulator(enable) {
+    if (!peerConnection || !localStream) return;
+    const audioSender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
+    if (!audioSender) return;
+
+    if (enable) {
+        if (!originalAudioTrack) originalAudioTrack = audioSender.track;
+        
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            mediaStreamSource = audioContext.createMediaStreamSource(localStream);
+            
+            // Robot voice effect using a BiquadFilter (lowpass) + Oscillator ring mod
+            biquadFilter = audioContext.createBiquadFilter();
+            biquadFilter.type = 'bandpass';
+            biquadFilter.frequency.value = 1000;
+            biquadFilter.Q.value = 5.0;
+
+            const oscillator = audioContext.createOscillator();
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.value = 50; 
+            
+            const gainNode = audioContext.createGain();
+            
+            mediaStreamSource.connect(biquadFilter);
+            biquadFilter.connect(gainNode);
+            oscillator.connect(gainNode.gain);
+            
+            mediaStreamDestination = audioContext.createMediaStreamDestination();
+            gainNode.connect(mediaStreamDestination);
+            
+            oscillator.start();
+        }
+        
+        const modulatedTrack = mediaStreamDestination.stream.getAudioTracks()[0];
+        audioSender.replaceTrack(modulatedTrack);
+    } else {
+        if (originalAudioTrack) {
+            audioSender.replaceTrack(originalAudioTrack);
+            originalAudioTrack = null;
+        }
+        if (audioContext) {
+            audioContext.close();
+            audioContext = null;
+        }
     }
 }

@@ -1,10 +1,11 @@
 import { state } from './store.js';
-import { CMD_LOGIN, CMD_REGISTER_OK, CMD_ERROR, CMD_LOGIN_OK, CMD_RESOLVE_OK, CMD_DH_INIT, CMD_DH_REPLY, CMD_USER_UPDATE_OK, CMD_ENC_MSG, CMD_TYPING, CMD_READ, CMD_GROUP_CREATE_OK, CMD_GROUP_INFO_OK, CMD_GROUP_MSG_RELAY, CMD_GROUP_READ, CMD_RTC_CALL, CMD_RTC_ANSWER, CMD_RTC_REJECT, CMD_RTC_END, CMD_RTC_ICE, buildPacket, parsePacket, obfuscate, deobfuscate, deriveSharedSecret, decryptPayload } from './amproto.js';
+import { CMD_LOGIN, CMD_REGISTER_OK, CMD_ERROR, CMD_LOGIN_OK, CMD_RESOLVE_OK, CMD_DH_INIT, CMD_DH_REPLY, CMD_USER_UPDATE_OK, CMD_ENC_MSG, CMD_TYPING, CMD_READ, CMD_GROUP_CREATE_OK, CMD_GROUP_INFO_OK, CMD_GROUP_MSG_RELAY, CMD_GROUP_READ, CMD_MSG_DELETE, CMD_RTC_CALL, CMD_RTC_ANSWER, CMD_RTC_REJECT, CMD_RTC_END, CMD_RTC_ICE, CMD_VAULT_UPLOAD_OK, CMD_VAULT_LIST_OK, CMD_VAULT_DOWNLOAD_OK, buildPacket, parsePacket, obfuscate, deobfuscate, deriveSharedSecret, decryptPayload } from './amproto.js';
 import { setupAuth, showError } from '../features/auth.js';
 import { renderChatList, getOrCreateChat, initials, avatarColor } from '../ui/chatList.js';
 import { renderMessages, openChat, showTypingIndicator, setupMessageUI } from '../ui/messages.js';
 import { setupModals, applyPreferences, applyThemeColor } from '../ui/modals.js';
 import * as WebRTC from '../features/webrtc.js';
+import * as Vault from '../features/vault.js';
 import { initCallUI } from '../ui/callUI.js';
 
 if (localStorage.getItem('whispr_session')) {
@@ -22,11 +23,10 @@ state.ws.onopen = () => {
     console.log("Connected to Relay Server");
     const session = localStorage.getItem('whispr_session');
     if (session) {
-        const { user, hash } = JSON.parse(session);
+        const { user, token } = JSON.parse(session);
         state.myUsername = user;
-        state.myPasswordHash = hash;
         loadPersistedKeys().then(() => {
-            const payload = JSON.stringify({ username: user, password: hash });
+            const payload = JSON.stringify({ username: user, sessionToken: token });
             const packet = buildPacket(CMD_LOGIN, 0, 0, payload);
             state.ws.send(obfuscate(packet));
         });
@@ -59,6 +59,10 @@ state.ws.onmessage = async (event) => {
             
             state.myPreferences = data.preferences || {};
             applyPreferences(state.myPreferences);
+            
+            if (data.sessionToken) {
+                localStorage.setItem('whispr_session', JSON.stringify({ user: data.username, token: data.sessionToken }));
+            }
 
             const avatar = document.getElementById('my-avatar');
             if (state.myAvatarUrl) {
@@ -165,7 +169,16 @@ state.ws.onmessage = async (event) => {
                 msgObj = { text: decryptedMsg };
             }
 
-            chat.messages.push({ text: msgObj.text || '', imgData: msgObj.imgData, isInvisible: msgObj.isInvisible, type: 'received', isRead: true, time: Date.now() });
+            chat.messages.push({ 
+                id: msgObj.id,
+                timer: msgObj.timer,
+                text: msgObj.text || '', 
+                imgData: msgObj.imgData, 
+                isInvisible: msgObj.isInvisible, 
+                type: 'received', 
+                isRead: true, 
+                time: Date.now() 
+            });
             chat.typing = false;
             await persistKeys();
 
@@ -233,6 +246,8 @@ state.ws.onmessage = async (event) => {
             }
 
             chat.messages.push({
+                id: msgObj.id || messageId,
+                timer: msgObj.timer,
                 senderId: senderId,
                 senderUsername: senderName,
                 text: msgObj.text || '',
@@ -253,6 +268,16 @@ state.ws.onmessage = async (event) => {
             }
             renderChatList();
         }
+        else if (packet.command === CMD_MSG_DELETE) {
+            const payload = JSON.parse(packet.payloadString);
+            const chatPeer = payload.isGroup ? 'group_' + payload.groupId : sender;
+            const chat = state.chats.get(chatPeer);
+            if (chat) {
+                chat.messages = chat.messages.filter(m => m.id !== payload.msgId);
+                await persistKeys();
+                if (state.currentActiveChat === chatPeer) renderMessages(chatPeer);
+            }
+        }
         else if (packet.command === CMD_RTC_CALL) {
             const payload = JSON.parse(packet.payloadString);
             WebRTC.handleIncomingCall(sender, payload);
@@ -271,6 +296,15 @@ state.ws.onmessage = async (event) => {
         }
         else if (packet.command === CMD_RTC_END) {
             WebRTC.handleEnd();
+        }
+        else if (packet.command === CMD_VAULT_UPLOAD_OK) {
+            Vault.handleVaultUploadOk(JSON.parse(packet.payloadString));
+        }
+        else if (packet.command === CMD_VAULT_LIST_OK) {
+            Vault.handleVaultListOk(JSON.parse(packet.payloadString));
+        }
+        else if (packet.command === CMD_VAULT_DOWNLOAD_OK) {
+            Vault.handleVaultDownloadOk(JSON.parse(packet.payloadString));
         }
     } catch (err) {
         console.error("Protocol Error:", err);

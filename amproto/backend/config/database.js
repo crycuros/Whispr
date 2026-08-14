@@ -13,7 +13,8 @@ db.serialize(() => {
         avatar_url TEXT,
         bio TEXT,
         theme_color TEXT,
-        preferences TEXT
+        preferences TEXT,
+        session_token TEXT
     )`);
     db.run(`CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,6 +51,16 @@ db.serialize(() => {
         last_read INTEGER DEFAULT 0,
         PRIMARY KEY (group_id, user_id)
     )`);
+    db.run(`CREATE TABLE IF NOT EXISTS file_vault (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        filename_enc TEXT,
+        mime_enc TEXT,
+        size_enc TEXT,
+        blob_data BLOB,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
 });
 
 module.exports = db;

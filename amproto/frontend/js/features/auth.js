@@ -21,13 +21,10 @@ export function setupAuth() {
         const pass = document.getElementById('auth-password').value.trim();
         if (!user || !pass) return showError("Please enter credentials");
 
-        const hash = await sha256(pass);
-        state.myPasswordHash = hash;
         state.myUsername = user;
-        localStorage.setItem('whispr_session', JSON.stringify({ user, hash }));
         await loadPersistedKeys();
 
-        const payload = JSON.stringify({ username: user, password: state.myPasswordHash });
+        const payload = JSON.stringify({ username: user, password: pass });
         const packet = buildPacket(CMD_LOGIN, 0, 0, payload);
         state.ws.send(obfuscate(packet));
     };
@@ -37,10 +34,7 @@ export function setupAuth() {
         const pass = document.getElementById('auth-password').value.trim();
         if (!user || !pass) return showError("Please enter credentials");
 
-        const hash = await sha256(pass);
-        state.myPasswordHash = hash;
-
-        const payload = JSON.stringify({ username: user, password: state.myPasswordHash });
+        const payload = JSON.stringify({ username: user, password: pass });
         const packet = buildPacket(CMD_REGISTER, 0, 0, payload);
         if(state.ws) state.ws.send(obfuscate(packet));
     };

@@ -19,6 +19,7 @@ export const CMD_GROUP_MSG = 0x13;
 export const CMD_GROUP_MSG_RELAY = 0x14;
 export const CMD_GROUP_INFO_OK = 0x16;
 export const CMD_GROUP_READ = 0x19;
+export const CMD_MSG_DELETE = 0x1A;
 export const CMD_USER_UPDATE = 0x20;
 export const CMD_USER_UPDATE_OK = 0x21;
 
@@ -28,6 +29,14 @@ export const CMD_RTC_ANSWER = 0x31;
 export const CMD_RTC_REJECT = 0x32;
 export const CMD_RTC_END = 0x33;
 export const CMD_RTC_ICE = 0x34;
+
+// Vault Commands
+export const CMD_VAULT_UPLOAD = 0x40;
+export const CMD_VAULT_UPLOAD_OK = 0x41;
+export const CMD_VAULT_LIST = 0x42;
+export const CMD_VAULT_LIST_OK = 0x43;
+export const CMD_VAULT_DOWNLOAD = 0x44;
+export const CMD_VAULT_DOWNLOAD_OK = 0x45;
 
 export function buildPacket(command, target, sender, payloadString) {
     const payloadBuffer = new TextEncoder().encode(payloadString);

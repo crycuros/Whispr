@@ -9,6 +9,7 @@ const authController = require('./backend/controllers/auth');
 const messagesController = require('./backend/controllers/messages');
 const groupsController = require('./backend/controllers/groups');
 const usersController = require('./backend/controllers/users');
+const vaultController = require('./backend/controllers/vault');
 
 const PORT = 3000;
 const clients = new Map(); // Map of clientID -> ws connection
@@ -72,6 +73,18 @@ wss.on('connection', (ws) => {
                     break;
                 case AMProto.CMD_GROUP_READ:
                     groupsController.handleGroupRead(ws, packet, db);
+                    break;
+                case AMProto.CMD_MSG_DELETE:
+                    messagesController.handleMsgDelete(ws, packet, clients, db);
+                    break;
+                case AMProto.CMD_VAULT_UPLOAD:
+                    vaultController.handleVaultUpload(ws, packet, clients, db);
+                    break;
+                case AMProto.CMD_VAULT_LIST:
+                    vaultController.handleVaultList(ws, packet, clients, db);
+                    break;
+                case AMProto.CMD_VAULT_DOWNLOAD:
+                    vaultController.handleVaultDownload(ws, packet, clients, db);
                     break;
                 default:
                     // Relay other commands (DH_INIT, DH_REPLY, TYPING, READ)

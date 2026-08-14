@@ -115,6 +115,45 @@ export function renderMessages(peerId) {
                     <span class="receipt-badge ${msg.isRead ? 'seen' : ''}">${whisperIconSVG}</span>
                 </div>
             `;
+        if (msg.timer && msg.timer > 0) {
+            if (!msg.readTime) {
+                if (msg.type === 'sent') msg.readTime = msg.time;
+                else if (msg.type === 'received') msg.readTime = Date.now();
+            }
+            
+            const timeLeft = Math.max(0, msg.readTime + (msg.timer * 1000) - Date.now());
+            if (timeLeft === 0) {
+                // Delete message
+                setTimeout(() => {
+                    chat.messages = chat.messages.filter(m => m.id !== msg.id);
+                    if (msg.type === 'received') {
+                        import('../core/amproto.js').then(AMP => {
+                            const packet = AMP.buildPacket(AMP.CMD_MSG_DELETE, 0, state.myId, JSON.stringify({ msgId: msg.id, isGroup: chat.isGroup, groupId: chat.groupId }));
+                            if (state.ws) state.ws.send(AMP.obfuscate(packet));
+                        });
+                    }
+                    import('../core/app.js').then(a => a.persistKeys && a.persistKeys());
+                    renderMessages(peerId);
+                }, 0);
+                return; // Skip rendering
+            }
+            
+            const timerBadge = `<span style="font-size: 10px; background: rgba(0,0,0,0.5); color: white; padding: 2px 6px; border-radius: 12px; margin-left: 8px;">${Math.ceil(timeLeft/1000)}s left</span>`;
+            if (msg.type === 'received') {
+                wrapper.querySelector('.bubble').innerHTML += timerBadge;
+            } else {
+                wrapper.querySelector('.bubble').innerHTML += timerBadge;
+            }
+            
+            // Re-render to update countdown
+            if (!window.activeTimers) window.activeTimers = new Set();
+            if (!window.activeTimers.has(msg.id)) {
+                window.activeTimers.add(msg.id);
+                setTimeout(() => {
+                    window.activeTimers.delete(msg.id);
+                    if (state.currentActiveChat === peerId) renderMessages(peerId);
+                }, 1000);
+            }
         }
 
         fragment.appendChild(wrapper);
@@ -208,15 +247,23 @@ export function setupMessageUI() {
     
     const sendMessageData = async (payloadObj) => {
         const chat = state.chats.get(state.currentActiveChat);
-        
+        const timerSelect = document.getElementById('timer-select');
+        const timerValue = timerSelect ? parseInt(timerSelect.value) : 0;
+        const localId = Date.now().toString() + '-' + Math.floor(Math.random()*1000);
+
         const localMsg = { 
+            id: localId,
             text: payloadObj.text || '', 
             imgData: payloadObj.imgData, 
             isInvisible: payloadObj.isInvisible,
+            timer: timerValue,
             type: 'sent', 
             isRead: chat.isGroup, 
             time: Date.now() 
         };
+        
+        payloadObj.id = localId;
+        payloadObj.timer = timerValue;
         if (chat.isGroup) {
             localMsg.senderId = state.myId;
             localMsg.senderUsername = state.myUsername;
