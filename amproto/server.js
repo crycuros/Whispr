@@ -159,6 +159,7 @@ wss.on('connection', (ws) => {
             const now = Date.now();
             db.run(`UPDATE users SET last_seen = ? WHERE id = ?`, [now, myId], () => {
                 friendsController.broadcastPresence(clients, db, myId, false, now);
+                groupsController.broadcastPresenceToGroupMembers(clients, db, myId, false, now);
             });
             console.log(`[Server] Web Client ${myId} disconnected`);
         }

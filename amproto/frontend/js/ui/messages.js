@@ -8,6 +8,8 @@ export function openChat(peerId) {
     state.currentActiveChat = peerId;
     const chat = state.chats.get(peerId);
     if (!chat) return;
+    const pop = document.getElementById('members-popover');
+    if (pop) pop.style.display = 'none';
 
     document.getElementById('empty-state').style.display = 'none';
     document.getElementById('main-chat-area').style.display = 'flex';
@@ -19,9 +21,10 @@ export function openChat(peerId) {
     headerAvatar.style.background = avatarColor(chat.username);
 
     if (chat.isGroup) {
-        document.getElementById('crypto-status').innerText = `${chat.members.length} members`;
-        document.getElementById('crypto-status').className = 'status-text text-muted';
+        updateGroupStatus(peerId);
     } else {
+        const pop = document.getElementById('members-popover');
+        if (pop) pop.style.display = 'none';
         updateChatStatus(peerId);
     }
 
@@ -76,6 +79,39 @@ export function openChat(peerId) {
     if (!chat.isGroup && !chat.isSecure && !chat.dhKeyPair && state.ws && state.myId) {
         ensureHandshake(peerId, chat);
     }
+}
+
+export function updateGroupStatus(peerId) {
+    const statusEl = document.getElementById('crypto-status');
+    if (!statusEl || state.currentActiveChat !== peerId) return;
+    const chat = state.chats.get(peerId);
+    if (!chat || !chat.isGroup) return;
+    const members = chat.members || [];
+    const onlineCount = members.filter(id => id === state.myId || state.presence.get(id)?.online === true).length;
+    statusEl.innerText = `${onlineCount}/${members.length} members online`;
+    statusEl.className = 'status-text text-muted';
+    renderMembersPopover(peerId);
+}
+
+export function renderMembersPopover(peerId) {
+    const pop = document.getElementById('members-popover');
+    if (!pop) return;
+    const chat = state.chats.get(peerId);
+    if (!chat || !chat.isGroup) {
+        pop.style.display = 'none';
+        return;
+    }
+    const names = chat.memberNames || {};
+    const members = (chat.members || []).map(id => ({
+        id,
+        username: names[id] || state.chats.get(id)?.username || `User ${id}`,
+        online: id === state.myId || state.presence.get(id)?.online === true
+    }));
+    pop.innerHTML = members.map(m => `
+        <div class="member-row ${m.online ? 'online' : ''}">
+            <span class="member-dot ${m.online ? 'text-success' : 'text-muted'}"></span>
+            <span class="member-name">${escapeHtml(m.username)}</span>
+        </div>`).join('');
 }
 
 export function updateChatStatus(peerId) {
@@ -289,7 +325,31 @@ export function setupMessageUI() {
             document.getElementById('main-chat-area').style.display = 'none';
             document.getElementById('empty-state').style.display = 'flex';
             document.querySelector('.messages-panel')?.classList.add('mobile-visible');
+            const pop = document.getElementById('members-popover');
+            if (pop) pop.style.display = 'none';
         };
+    }
+
+    const statusEl = document.getElementById('crypto-status');
+    const popover = document.getElementById('members-popover');
+    if (statusEl && popover) {
+        statusEl.onclick = (e) => {
+            e.stopPropagation();
+            const chat = state.chats.get(state.currentActiveChat);
+            if (chat && chat.isGroup) {
+            if (popover.style.display === 'block') {
+                popover.style.display = 'none';
+            } else {
+                renderMembersPopover(state.currentActiveChat);
+                popover.style.display = 'block';
+            }
+            }
+        };
+        document.addEventListener('click', (e) => {
+            if (popover.style.display === 'block' && !popover.contains(e.target) && e.target !== statusEl) {
+                popover.style.display = 'none';
+            }
+        });
     }
     window.addEventListener('resize', () => {
         clearTimeout(window.__mobileResizeTimer);

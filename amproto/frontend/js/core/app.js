@@ -3,7 +3,7 @@ import { CMD_LOGIN, CMD_REGISTER_OK, CMD_ERROR, CMD_LOGIN_OK, CMD_RESOLVE_OK, CM
 import { setupAuth, showError } from '../features/auth.js';
 import { setupPolls, castVote } from '../features/polls.js';
 import { renderChatList, getOrCreateChat, initials, avatarColor } from '../ui/chatList.js';
-import { renderMessages, appendMessage, openChat, updateChatStatus, showTypingIndicator, setupMessageUI } from '../ui/messages.js';
+import { renderMessages, appendMessage, openChat, updateChatStatus, updateGroupStatus, showTypingIndicator, setupMessageUI } from '../ui/messages.js';
 import { setupModals, applyPreferences, applyThemeColor } from '../ui/modals.js';
 import { renderResolvedProfile, renderPendingRequests, addPendingRequest, removePendingRequest, setupFriendsUI } from '../ui/friends.js';
 import * as WebRTC from '../features/webrtc.js';
@@ -264,7 +264,7 @@ state.ws.onmessage = async (event) => {
         }
         else if (packet.command === CMD_GROUP_CREATE_OK || packet.command === CMD_GROUP_INFO_OK) {
             const payload = JSON.parse(packet.payloadString);
-            const { groupId, name, description, avatarUrl, members, isFeed, creatorId } = payload;
+            const { groupId, name, description, avatarUrl, members, memberNames, isFeed, creatorId } = payload;
             const groupPeerId = 'group_' + groupId;
             state.chats.set(groupPeerId, {
                 peerId: groupPeerId,
@@ -276,6 +276,7 @@ state.ws.onmessage = async (event) => {
                 description: description,
                 avatarUrl: avatarUrl,
                 members: members,
+                memberNames: memberNames || state.chats.get(groupPeerId)?.memberNames || {},
                 messages: state.chats.get(groupPeerId)?.messages || [],
                 unreadCount: state.chats.get(groupPeerId)?.unreadCount || 0
             });
@@ -290,6 +291,7 @@ state.ws.onmessage = async (event) => {
 
             let senderName = `User ${senderId}`;
             if (senderId === state.myId) senderName = state.myUsername;
+            else if (chat.memberNames && chat.memberNames[senderId]) senderName = chat.memberNames[senderId];
             else if (state.chats.has(senderId)) senderName = state.chats.get(senderId).username;
 
             let msgObj;
@@ -343,7 +345,9 @@ state.ws.onmessage = async (event) => {
         else if (packet.command === CMD_PRESENCE) {
             const data = JSON.parse(packet.payloadString);
             state.presence.set(data.userId, { online: data.online, lastSeen: data.lastSeen || null });
-            if (state.currentActiveChat === data.userId) updateChatStatus(data.userId);
+            const cur = state.chats.get(state.currentActiveChat);
+            if (cur && cur.isGroup && cur.members.includes(data.userId)) updateGroupStatus(state.currentActiveChat);
+            else if (state.currentActiveChat === data.userId) updateChatStatus(data.userId);
             renderChatList();
         }
         else if (packet.command === CMD_RTC_CALL) {
@@ -391,6 +395,7 @@ export async function persistKeys() {
                 isFeed: chat.isFeed,
                 creatorId: chat.creatorId,
                 members: chat.members,
+                memberNames: chat.memberNames || {},
                 messages: chat.messages
             };
             continue;
@@ -453,6 +458,7 @@ export async function loadPersistedKeys() {
                         isFeed: dataObj.isFeed,
                         creatorId: dataObj.creatorId,
                         members: dataObj.members || [],
+                        memberNames: dataObj.memberNames || {},
                         messages: dataObj.messages || [],
                         unreadCount: 0
                     });
@@ -462,6 +468,7 @@ export async function loadPersistedKeys() {
                     if (!existing.messages || existing.messages.length === 0) {
                         existing.messages = dataObj.messages || [];
                     }
+                    if (dataObj.memberNames) existing.memberNames = dataObj.memberNames;
                 }
                 continue;
             }

@@ -15,20 +15,28 @@ exports.handleGroupCreate = (ws, packet, clients, db) => {
             allMembers.forEach(userId => {
                 stmt.run(groupId, userId, userId === packet.senderId ? 'admin' : 'member');
             });
-            stmt.finalize();
-            
-            const okPacket = AMProto.buildPacket(AMProto.CMD_GROUP_CREATE_OK, packet.senderId, 0, JSON.stringify({ groupId, name, members: allMembers, isFeed: !!isFeed, description, avatarUrl, creatorId: packet.senderId }));
-            ws.send(AMProto.obfuscate(okPacket));
-            
-            const infoPacketStr = JSON.stringify({ groupId, name, members: allMembers, isFeed: !!isFeed, description, avatarUrl, creatorId: packet.senderId });
-            allMembers.forEach(userId => {
-                if (userId !== packet.senderId && clients.has(userId)) {
-                    const targetWs = clients.get(userId);
-                    if (targetWs.readyState === WebSocket.OPEN) {
-                        const infoPacket = AMProto.buildPacket(AMProto.CMD_GROUP_INFO_OK, userId, 0, infoPacketStr);
-                        targetWs.send(AMProto.obfuscate(infoPacket));
-                    }
-                }
+            stmt.finalize(() => {
+                const placeholders = allMembers.map(() => '?').join(',');
+                db.all(`SELECT id, username FROM users WHERE id IN (${placeholders})`, allMembers, (e, users) => {
+                    const memberNames = {};
+                    if (!e && users) users.forEach(u => memberNames[u.id] = u.username);
+
+                    const okPacket = AMProto.buildPacket(AMProto.CMD_GROUP_CREATE_OK, packet.senderId, 0, JSON.stringify({ groupId, name, members: allMembers, memberNames, isFeed: !!isFeed, description, avatarUrl, creatorId: packet.senderId }));
+                    ws.send(AMProto.obfuscate(okPacket));
+
+                    const infoPacketStr = JSON.stringify({ groupId, name, members: allMembers, memberNames, isFeed: !!isFeed, description, avatarUrl, creatorId: packet.senderId });
+                    allMembers.forEach(userId => {
+                        if (userId !== packet.senderId && clients.has(userId)) {
+                            const targetWs = clients.get(userId);
+                            if (targetWs.readyState === WebSocket.OPEN) {
+                                const infoPacket = AMProto.buildPacket(AMProto.CMD_GROUP_INFO_OK, userId, 0, infoPacketStr);
+                                targetWs.send(AMProto.obfuscate(infoPacket));
+                            }
+                        }
+                    });
+
+                    exports.syncGroupPresence(db, allMembers, clients);
+                });
             });
         }
     });
@@ -90,5 +98,70 @@ exports.handleGroupRead = (ws, packet, db) => {
         ON CONFLICT(group_id, user_id) DO UPDATE SET last_read = max(last_read, excluded.last_read)
     `, [groupId, packet.senderId, lastReadMsgId], (err) => {
         if (err) console.error("Error upserting group_read", err);
+    });
+};
+
+exports.getGroupMemberIds = (db, userId, cb) => {
+    db.all(`SELECT DISTINCT gm.user_id FROM group_members gm
+            JOIN group_members me ON me.group_id = gm.group_id
+            WHERE me.user_id = ? AND gm.user_id != ?`, [userId, userId], (err, rows) => {
+        cb(err, rows ? rows.map(r => r.user_id) : []);
+    });
+};
+
+exports.syncGroupPresence = (db, memberIds, clients) => {
+    const ids = Array.from(new Set(memberIds));
+    if (ids.length === 0) return;
+    const placeholders = ids.map(() => '?').join(',');
+    db.all(`SELECT id, last_seen FROM users WHERE id IN (${placeholders})`, ids, (err, users) => {
+        if (err) return;
+        const lastSeen = {};
+        users.forEach(u => lastSeen[u.id] = u.last_seen);
+        ids.forEach(subjectId => {
+            const online = clients.has(subjectId);
+            const payload = JSON.stringify({ userId: subjectId, online, lastSeen: online ? null : (lastSeen[subjectId] || null) });
+            ids.forEach(targetId => {
+                if (targetId === subjectId) return;
+                if (clients.has(targetId)) {
+                    const tws = clients.get(targetId);
+                    if (tws.readyState === WebSocket.OPEN) {
+                        tws.send(AMProto.obfuscate(AMProto.buildPacket(AMProto.CMD_PRESENCE, targetId, subjectId, payload)));
+                    }
+                }
+            });
+        });
+    });
+};
+
+exports.broadcastPresenceToGroupMembers = (clients, db, userId, online, lastSeen) => {
+    exports.getGroupMemberIds(db, userId, (err, ids) => {
+        if (err) return;
+        const payload = JSON.stringify({ userId, online, lastSeen });
+        ids.forEach(mid => {
+            if (clients.has(mid)) {
+                const tws = clients.get(mid);
+                if (tws.readyState === WebSocket.OPEN) {
+                    tws.send(AMProto.obfuscate(AMProto.buildPacket(AMProto.CMD_PRESENCE, mid, userId, payload)));
+                }
+            }
+        });
+    });
+};
+
+exports.sendGroupMemberPresence = (ws, myId, clients, db) => {
+    exports.getGroupMemberIds(db, myId, (err, ids) => {
+        if (err) return;
+        const placeholders = ids.map(() => '?').join(',');
+        if (ids.length === 0) return;
+        db.all(`SELECT id, last_seen FROM users WHERE id IN (${placeholders})`, ids, (e, users) => {
+            if (e) return;
+            const lastSeen = {};
+            users.forEach(u => lastSeen[u.id] = u.last_seen);
+            ids.forEach(mid => {
+                const online = clients.has(mid);
+                const p = AMProto.buildPacket(AMProto.CMD_PRESENCE, myId, mid, JSON.stringify({ userId: mid, online, lastSeen: online ? null : (lastSeen[mid] || null) }));
+                ws.send(AMProto.obfuscate(p));
+            });
+        });
     });
 };

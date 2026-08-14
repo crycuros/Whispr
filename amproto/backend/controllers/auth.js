@@ -1,6 +1,7 @@
 const AMProto = require('../core/amproto');
 const crypto = require('crypto');
 const friendsController = require('./friends');
+const groupsController = require('./groups');
 
 exports.handleRegister = (ws, packet, clients, db) => {
     try {
@@ -90,6 +91,8 @@ function completeLogin(ws, packet, clients, db, setMyIdCallback, row, sessionTok
 
     friendsController.sendMyFriendPresence(ws, myId, clients, db);
     friendsController.broadcastPresence(clients, db, myId, true, null);
+    groupsController.sendGroupMemberPresence(ws, myId, clients, db);
+    groupsController.broadcastPresenceToGroupMembers(clients, db, myId, true, null);
     
     let prefs = {};
     if (row.preferences) {
@@ -126,19 +129,34 @@ function completeLogin(ws, packet, clients, db, setMyIdCallback, row, sessionTok
         JOIN group_members gm ON g.id = gm.group_id
         WHERE gm.user_id = ?`, [myId], (err, groupList) => {
         if (!err && groupList) {
-            groupList.forEach(g => {
-                const members = g.member_ids ? g.member_ids.split(',').map(Number) : [];
-                const infoPayload = JSON.stringify({
-                    groupId: g.id,
-                    name: g.name,
-                    description: g.description,
-                    avatarUrl: g.avatar_url,
-                    members: members,
-                    isFeed: !!g.is_feed,
-                    creatorId: g.created_by
+            const allMemberIds = Array.from(new Set(groupList.flatMap(g => (g.member_ids || '').split(',').map(Number).filter(n => !isNaN(n)))));
+            const resolveNames = (cb) => {
+                if (allMemberIds.length === 0) return cb({});
+                const ph = allMemberIds.map(() => '?').join(',');
+                db.all(`SELECT id, username FROM users WHERE id IN (${ph})`, allMemberIds, (e, users) => {
+                    const map = {};
+                    if (!e && users) users.forEach(u => map[u.id] = u.username);
+                    cb(map);
                 });
-                const infoPacket = AMProto.buildPacket(AMProto.CMD_GROUP_INFO_OK, myId, 0, infoPayload);
-                ws.send(AMProto.obfuscate(infoPacket));
+            };
+            resolveNames((userNames) => {
+                groupList.forEach(g => {
+                    const members = g.member_ids ? g.member_ids.split(',').map(Number) : [];
+                    const memberNames = {};
+                    members.forEach(mid => memberNames[mid] = userNames[mid] || `User ${mid}`);
+                    const infoPayload = JSON.stringify({
+                        groupId: g.id,
+                        name: g.name,
+                        description: g.description,
+                        avatarUrl: g.avatar_url,
+                        members: members,
+                        memberNames: memberNames,
+                        isFeed: !!g.is_feed,
+                        creatorId: g.created_by
+                    });
+                    const infoPacket = AMProto.buildPacket(AMProto.CMD_GROUP_INFO_OK, myId, 0, infoPayload);
+                    ws.send(AMProto.obfuscate(infoPacket));
+                });
             });
         }
 
