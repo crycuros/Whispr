@@ -336,7 +336,9 @@
             </div>
             <div class="messages-container" id="messages"></div>
             <div class="input-area">
+                <button class="ghost-btn" id="btn-draw" title="Quick Draw" style="margin-right: 8px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path><circle cx="11" cy="11" r="2"></circle></svg></button>
                 <button class="mic-btn" id="btn-mic" title="Voice message"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line></svg></button>
+                <button class="ghost-btn" id="btn-invisible-ink" title="Toggle Invisible Ink" style="margin-right: 8px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
                 <input type="text" id="msg-input" placeholder="Write a message..." disabled autocomplete="off">
                 <button id="btn-send" disabled title="Send"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></button>
             </div>
@@ -398,6 +400,28 @@
             <div class="modal-actions" style="display: flex; justify-content: center; gap: 16px;">
                 <button class="btn-secondary" id="btn-reject-call" style="background: rgba(224, 108, 117, 0.2); color: #E06C75; border: 1px solid #E06C75;">Decline</button>
                 <button class="btn-primary" id="btn-accept-call" style="background: #297A4A;">Accept</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- QUICK DRAW MODAL -->
+    <div class="modal-overlay" id="draw-modal" style="display: none; z-index: 20000;">
+        <div class="modal" style="max-width: 90vw; width: auto; text-align: center; background: var(--bg-primary);">
+            <h3 style="margin-top: 0;">Quick Draw</h3>
+            <div style="background: white; border-radius: 8px; margin-bottom: 16px; overflow: hidden; border: 2px solid var(--border);">
+                <canvas id="draw-canvas" width="400" height="300" style="display: block; cursor: crosshair; touch-action: none;"></canvas>
+            </div>
+            <div style="display: flex; gap: 8px; justify-content: center; margin-bottom: 16px;">
+                <button class="color-swatch" style="background: #000; width: 24px; height: 24px;" data-draw-color="#000"></button>
+                <button class="color-swatch" style="background: #f43f5e; width: 24px; height: 24px;" data-draw-color="#f43f5e"></button>
+                <button class="color-swatch" style="background: #3b82f6; width: 24px; height: 24px;" data-draw-color="#3b82f6"></button>
+                <button class="color-swatch" style="background: #10b981; width: 24px; height: 24px;" data-draw-color="#10b981"></button>
+                <button class="color-swatch" style="background: #facc15; width: 24px; height: 24px;" data-draw-color="#facc15"></button>
+                <button class="btn-secondary" id="btn-draw-clear" style="padding: 4px 8px; font-size: 12px; margin-left: auto;">Clear</button>
+            </div>
+            <div class="modal-actions" style="display: flex; justify-content: center; gap: 16px;">
+                <button class="btn-secondary" id="btn-draw-cancel">Cancel</button>
+                <button class="btn-primary" id="btn-draw-send">Send Drawing</button>
             </div>
         </div>
     </div>

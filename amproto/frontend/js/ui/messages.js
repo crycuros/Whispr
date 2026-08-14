@@ -67,6 +67,7 @@ export function renderMessages(peerId) {
     if (!chat || !container) return;
     
     container.innerHTML = '';
+    const fragment = document.createDocumentFragment();
 
     let lastDay = null;
     chat.messages.forEach(msg => {
@@ -75,30 +76,40 @@ export function renderMessages(peerId) {
             const divider = document.createElement('div');
             divider.className = 'date-divider';
             divider.innerText = dateLabel(msg.time);
-            container.appendChild(divider);
+            fragment.appendChild(divider);
             lastDay = day;
         }
 
         const wrapper = document.createElement('div');
         wrapper.className = `message-row ${msg.type}`;
 
+        let messageContent = '';
+        if (msg.imgData) {
+            messageContent = `<img src="${msg.imgData}" style="max-width: 200px; border-radius: 8px; cursor: pointer;">`;
+            if (msg.text) messageContent += `<br>${escapeHtml(msg.text)}`;
+        } else {
+            messageContent = escapeHtml(msg.text);
+        }
+
+        const invisibleClass = msg.isInvisible ? 'invisible-ink' : '';
+
         if (msg.type === 'system') {
             wrapper.classList.add('system');
-            wrapper.innerHTML = `<div class="date-divider">${escapeHtml(msg.text)}</div>`;
+            wrapper.innerHTML = `<div class="date-divider">${messageContent}</div>`;
         } else if (msg.type === 'received') {
             const name = chat.isGroup ? (msg.senderUsername || chat.username) : chat.username;
             wrapper.innerHTML = `
                 <div class="row-avatar" style="background:${avatarColor(name)}">${initials(name)}</div>
                 <div class="row-main">
                     ${chat.isGroup ? `<span class="sender-name" style="color:${avatarColor(msg.senderUsername || chat.username)}">${escapeHtml(msg.senderUsername || chat.username)}</span>` : ''}
-                    <div class="bubble received">${escapeHtml(msg.text)}</div>
+                    <div class="bubble received ${invisibleClass}">${messageContent}</div>
                     <span class="msg-time">${formatTime(msg.time)}</span>
                 </div>
             `;
         } else {
             wrapper.innerHTML = `
                 <div class="sent-group">
-                    <div class="bubble sent">${escapeHtml(msg.text)}
+                    <div class="bubble sent ${invisibleClass}">${messageContent}
                         <span class="msg-time-inside">${formatTime(msg.time)}</span>
                     </div>
                     <span class="receipt-badge ${msg.isRead ? 'seen' : ''}">${whisperIconSVG}</span>
@@ -106,9 +117,10 @@ export function renderMessages(peerId) {
             `;
         }
 
-        container.appendChild(wrapper);
+        fragment.appendChild(wrapper);
     });
 
+    container.appendChild(fragment);
     container.scrollTop = container.scrollHeight;
 }
 
@@ -131,6 +143,108 @@ export function showTypingIndicator() {
 }
 
 export function setupMessageUI() {
+    let isInvisibleMode = false;
+    const btnInvisible = document.getElementById('btn-invisible-ink');
+    if (btnInvisible) {
+        btnInvisible.onclick = () => {
+            isInvisibleMode = !isInvisibleMode;
+            btnInvisible.style.color = isInvisibleMode ? 'var(--accent)' : '';
+        };
+    }
+
+    const drawModal = document.getElementById('draw-modal');
+    const drawCanvas = document.getElementById('draw-canvas');
+    let ctx, isDrawing = false;
+    let currentColor = '#000';
+    if (drawCanvas) {
+        ctx = drawCanvas.getContext('2d');
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 4;
+        
+        const startDraw = (e) => {
+            isDrawing = true;
+            ctx.beginPath();
+            const rect = drawCanvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            ctx.moveTo(clientX - rect.left, clientY - rect.top);
+        };
+        const draw = (e) => {
+            if (!isDrawing) return;
+            e.preventDefault();
+            const rect = drawCanvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            ctx.strokeStyle = currentColor;
+            ctx.lineTo(clientX - rect.left, clientY - rect.top);
+            ctx.stroke();
+        };
+        const endDraw = () => { isDrawing = false; ctx.closePath(); };
+        
+        drawCanvas.addEventListener('mousedown', startDraw);
+        drawCanvas.addEventListener('mousemove', draw);
+        window.addEventListener('mouseup', endDraw);
+        drawCanvas.addEventListener('touchstart', startDraw, {passive: false});
+        drawCanvas.addEventListener('touchmove', draw, {passive: false});
+        window.addEventListener('touchend', endDraw);
+        
+        document.querySelectorAll('#draw-modal .color-swatch').forEach(btn => {
+            btn.onclick = () => currentColor = btn.dataset.drawColor;
+        });
+        document.getElementById('btn-draw-clear').onclick = () => {
+            ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        };
+    }
+
+    document.getElementById('btn-draw').onclick = () => {
+        if (!state.currentActiveChat) return;
+        const chat = state.chats.get(state.currentActiveChat);
+        if (!chat.isSecure && !chat.isGroup) return;
+        if (ctx) ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        drawModal.style.display = 'flex';
+    };
+    document.getElementById('btn-draw-cancel').onclick = () => drawModal.style.display = 'none';
+    
+    const sendMessageData = async (payloadObj) => {
+        const chat = state.chats.get(state.currentActiveChat);
+        
+        const localMsg = { 
+            text: payloadObj.text || '', 
+            imgData: payloadObj.imgData, 
+            isInvisible: payloadObj.isInvisible,
+            type: 'sent', 
+            isRead: chat.isGroup, 
+            time: Date.now() 
+        };
+        if (chat.isGroup) {
+            localMsg.senderId = state.myId;
+            localMsg.senderUsername = state.myUsername;
+            chat.messages.push(localMsg);
+            renderMessages(state.currentActiveChat);
+            renderChatList();
+            
+            const packet = buildPacket(CMD_GROUP_MSG, 0, state.myId, JSON.stringify({ groupId: chat.groupId, text: JSON.stringify(payloadObj) }));
+            if (state.ws) state.ws.send(obfuscate(packet));
+        } else {
+            chat.messages.push(localMsg);
+            await persistKeys();
+            renderMessages(state.currentActiveChat);
+            renderChatList();
+            
+            const encryptedPayload = await encryptPayload(chat.sharedSecretKey, JSON.stringify(payloadObj));
+            const encPacket = buildPacket(CMD_ENC_MSG, state.currentActiveChat, state.myId, JSON.stringify(encryptedPayload));
+            if (state.ws) state.ws.send(obfuscate(encPacket));
+        }
+    };
+
+    document.getElementById('btn-draw-send').onclick = () => {
+        if (!state.currentActiveChat) return;
+        const imgData = drawCanvas.toDataURL('image/png');
+        drawModal.style.display = 'none';
+        sendMessageData({ imgData, isInvisible: isInvisibleMode });
+    };
+
     document.getElementById('btn-send').onclick = async () => {
         if (!state.currentActiveChat) return;
         const chat = state.chats.get(state.currentActiveChat);
@@ -139,25 +253,7 @@ export function setupMessageUI() {
         if (!text || (!chat.isSecure && !chat.isGroup)) return;
 
         input.value = '';
-
-        if (chat.isGroup) {
-            chat.messages.push({ senderId: state.myId, senderUsername: state.myUsername, text, type: 'sent', isRead: true, time: Date.now() });
-            renderMessages(state.currentActiveChat);
-            renderChatList();
-            const packet = buildPacket(CMD_GROUP_MSG, 0, state.myId, JSON.stringify({ groupId: chat.groupId, text }));
-            if (state.ws) state.ws.send(obfuscate(packet));
-            return;
-        }
-
-        chat.messages.push({ text, type: 'sent', isRead: false, time: Date.now() });
-        await persistKeys();
-
-        renderMessages(state.currentActiveChat);
-        renderChatList();
-
-        const encryptedPayload = await encryptPayload(chat.sharedSecretKey, text);
-        const encPacket = buildPacket(CMD_ENC_MSG, state.currentActiveChat, state.myId, JSON.stringify(encryptedPayload));
-        if (state.ws) state.ws.send(obfuscate(encPacket));
+        sendMessageData({ text, isInvisible: isInvisibleMode });
     };
 
     document.getElementById('msg-input').addEventListener('keypress', (e) => {

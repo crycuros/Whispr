@@ -157,8 +157,15 @@ state.ws.onmessage = async (event) => {
 
             const payload = JSON.parse(packet.payloadString);
             const decryptedMsg = await decryptPayload(chat.sharedSecretKey, payload);
+            
+            let msgObj;
+            try {
+                msgObj = JSON.parse(decryptedMsg);
+            } catch(e) {
+                msgObj = { text: decryptedMsg };
+            }
 
-            chat.messages.push({ text: decryptedMsg, type: 'received', isRead: true, time: Date.now() });
+            chat.messages.push({ text: msgObj.text || '', imgData: msgObj.imgData, isInvisible: msgObj.isInvisible, type: 'received', isRead: true, time: Date.now() });
             chat.typing = false;
             await persistKeys();
 
@@ -218,10 +225,19 @@ state.ws.onmessage = async (event) => {
             if (senderId === state.myId) senderName = state.myUsername;
             else if (state.chats.has(senderId)) senderName = state.chats.get(senderId).username;
 
+            let msgObj;
+            try {
+                msgObj = JSON.parse(text);
+            } catch(e) {
+                msgObj = { text: text };
+            }
+
             chat.messages.push({
                 senderId: senderId,
                 senderUsername: senderName,
-                text: text,
+                text: msgObj.text || '',
+                imgData: msgObj.imgData,
+                isInvisible: msgObj.isInvisible,
                 type: senderId === state.myId ? 'sent' : 'received',
                 isRead: true,
                 time: Date.now(),
