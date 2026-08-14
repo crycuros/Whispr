@@ -147,6 +147,20 @@ export function setupModals() {
         });
     }
 
+    const btnFiles = document.getElementById('btn-files');
+    const panelVault = document.getElementById('panel-vault');
+    if (btnFiles && panelVault) {
+        btnFiles.addEventListener('click', () => {
+            document.querySelectorAll('.side-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            btnFiles.classList.add('active');
+            
+            // Re-use active class style, or set display block
+            panelVault.style.display = 'flex';
+            panelVault.classList.add('active');
+        });
+    }
+
     if (btnLogout) {
         btnLogout.addEventListener('click', () => {
             localStorage.removeItem('whispr_session');

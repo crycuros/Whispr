@@ -65,6 +65,26 @@ export function initCallUI() {
         });
     }
 
+    const btnShareScreen = document.getElementById('btn-share-screen');
+    let isSharingScreen = false;
+    if (btnShareScreen) {
+        btnShareScreen.addEventListener('click', async () => {
+            isSharingScreen = !isSharingScreen;
+            await WebRTC.toggleScreenShare(isSharingScreen);
+            btnShareScreen.style.color = isSharingScreen ? 'var(--accent)' : '';
+        });
+    }
+
+    const btnVoiceModulator = document.getElementById('btn-voice-modulator');
+    let isModulatorOn = false;
+    if (btnVoiceModulator) {
+        btnVoiceModulator.addEventListener('click', () => {
+            isModulatorOn = !isModulatorOn;
+            WebRTC.toggleVoiceModulator(isModulatorOn);
+            btnVoiceModulator.style.color = isModulatorOn ? 'var(--accent)' : '';
+        });
+    }
+
     if (btnEndCall) {
         btnEndCall.addEventListener('click', () => {
             WebRTC.endCall();

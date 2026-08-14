@@ -23,3 +23,39 @@ exports.handleEncMsg = (ws, packet, rawData, clients, db) => {
         console.log(`[Server] Target ${targetId} offline. Message saved.`);
     }
 };
+
+exports.handleMsgDelete = (ws, packet, clients, db) => {
+    const payload = JSON.parse(packet.payloadString);
+    const { msgId, isGroup, groupId } = payload;
+    const senderId = packet.senderId;
+
+    if (isGroup) {
+        db.run(`DELETE FROM group_messages WHERE id = ?`, [msgId], (err) => {
+            if (err) console.error("Error deleting group message:", err);
+        });
+        
+        db.all(`SELECT user_id FROM group_members WHERE group_id = ?`, [groupId], (err, rows) => {
+            if (err || !rows) return;
+            rows.forEach(row => {
+                if (row.user_id !== senderId && clients.has(row.user_id)) {
+                    const targetWs = clients.get(row.user_id);
+                    if (targetWs.readyState === WebSocket.OPEN) {
+                        targetWs.send(packet.rawData);
+                    }
+                }
+            });
+        });
+    } else {
+        db.run(`DELETE FROM messages WHERE (sender_id = ? OR receiver_id = ?) AND payload LIKE ?`, [senderId, senderId, `%${msgId}%`], (err) => {
+            if (err) console.error("Error deleting message:", err);
+        });
+
+        const targetId = packet.targetId;
+        if (clients.has(targetId)) {
+            const targetWs = clients.get(targetId);
+            if (targetWs.readyState === WebSocket.OPEN) {
+                targetWs.send(packet.rawData);
+            }
+        }
+    }
+};

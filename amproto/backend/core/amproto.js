@@ -27,6 +27,7 @@ class AMProto {
     static CMD_GROUP_MSG_RELAY = 0x14;
     static CMD_GROUP_INFO_OK = 0x16;
     static CMD_GROUP_READ = 0x19;
+    static CMD_MSG_DELETE = 0x1A;
     
     // User commands
     static CMD_USER_UPDATE = 0x20;
@@ -38,6 +39,14 @@ class AMProto {
     static CMD_RTC_REJECT = 0x32;
     static CMD_RTC_END = 0x33;
     static CMD_RTC_ICE = 0x34;
+
+    // Vault Commands
+    static CMD_VAULT_UPLOAD = 0x40;
+    static CMD_VAULT_UPLOAD_OK = 0x41;
+    static CMD_VAULT_LIST = 0x42;
+    static CMD_VAULT_LIST_OK = 0x43;
+    static CMD_VAULT_DOWNLOAD = 0x44;
+    static CMD_VAULT_DOWNLOAD_OK = 0x45;
     
     // Obfuscation Mask (Simple XOR to hide the header from DPI)
     // In production, this would be a dynamic AES-CTR stream like MTProto FakeTLS.
