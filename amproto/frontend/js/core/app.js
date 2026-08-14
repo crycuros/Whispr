@@ -1,9 +1,11 @@
 import { state } from './store.js';
-import { CMD_LOGIN, CMD_REGISTER_OK, CMD_ERROR, CMD_LOGIN_OK, CMD_RESOLVE_OK, CMD_DH_INIT, CMD_DH_REPLY, CMD_USER_UPDATE_OK, CMD_ENC_MSG, CMD_TYPING, CMD_READ, CMD_GROUP_CREATE_OK, CMD_GROUP_INFO_OK, CMD_GROUP_MSG_RELAY, CMD_GROUP_READ, CMD_MSG_DELETE, CMD_RTC_CALL, CMD_RTC_ANSWER, CMD_RTC_REJECT, CMD_RTC_END, CMD_RTC_ICE, CMD_VAULT_UPLOAD_OK, CMD_VAULT_LIST_OK, CMD_VAULT_DOWNLOAD_OK, buildPacket, parsePacket, obfuscate, deobfuscate, deriveSharedSecret, decryptPayload } from './amproto.js';
+import { CMD_LOGIN, CMD_REGISTER_OK, CMD_ERROR, CMD_LOGIN_OK, CMD_RESOLVE_OK, CMD_DH_INIT, CMD_DH_REPLY, CMD_USER_UPDATE_OK, CMD_ENC_MSG, CMD_TYPING, CMD_READ, CMD_GROUP_CREATE_OK, CMD_GROUP_INFO_OK, CMD_GROUP_MSG_RELAY, CMD_GROUP_READ, CMD_MSG_DELETE, CMD_RTC_CALL, CMD_RTC_ANSWER, CMD_RTC_REJECT, CMD_RTC_END, CMD_RTC_ICE, CMD_VAULT_UPLOAD_OK, CMD_VAULT_LIST_OK, CMD_VAULT_DOWNLOAD_OK, CMD_LINK_PREVIEW_RES, CMD_REQ_SEND_OK, CMD_REQ_RECEIVED, CMD_REQ_ACCEPTED, CMD_REQ_DECLINED, CMD_REQ_LIST, CMD_REQ_LIST_OK, buildPacket, parsePacket, obfuscate, deobfuscate, deriveSharedSecret, decryptPayload } from './amproto.js';
 import { setupAuth, showError } from '../features/auth.js';
+import { setupPolls, castVote } from '../features/polls.js';
 import { renderChatList, getOrCreateChat, initials, avatarColor } from '../ui/chatList.js';
-import { renderMessages, openChat, showTypingIndicator, setupMessageUI } from '../ui/messages.js';
+import { renderMessages, appendMessage, openChat, showTypingIndicator, setupMessageUI } from '../ui/messages.js';
 import { setupModals, applyPreferences, applyThemeColor } from '../ui/modals.js';
+import { renderResolvedProfile, renderPendingRequests, addPendingRequest, removePendingRequest, setupFriendsUI } from '../ui/friends.js';
 import * as WebRTC from '../features/webrtc.js';
 import * as Vault from '../features/vault.js';
 import { initCallUI } from '../ui/callUI.js';
@@ -14,6 +16,17 @@ if (localStorage.getItem('whispr_session')) {
     document.getElementById('app-container').style.opacity = '1';
     document.getElementById('update-toast').style.display = 'flex';
 }
+
+// Breakpoints are based on the VISUAL window width (window.innerWidth), which
+// stays constant under root `zoom`, so zooming never flips the app into a
+// "narrow"/"mobile" layout on a desktop window. Container/media queries would
+// evaluate against the zoomed layout space instead (visualWidth / zoom).
+function updateViewportBreakpoints() {
+    const w = window.innerWidth;
+    document.documentElement.dataset.panel = w <= 600 ? 'mobile' : (w <= 900 ? 'narrow' : '');
+}
+window.addEventListener('resize', updateViewportBreakpoints);
+updateViewportBreakpoints();
 
 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 state.ws = new WebSocket(`${protocol}//${window.location.host}`);
@@ -84,23 +97,47 @@ state.ws.onmessage = async (event) => {
                 document.getElementById('app-container').style.display = 'flex';
                 setTimeout(() => { document.getElementById('app-container').style.opacity = '1'; }, 50);
             }, 500);
+
+            const reqListPacket = buildPacket(CMD_REQ_LIST, 0, state.myId, '{}');
+            state.ws.send(obfuscate(reqListPacket));
         }
         else if (packet.command === CMD_RESOLVE_OK) {
             const data = JSON.parse(packet.payloadString);
+            renderResolvedProfile(data);
+        }
+        else if (packet.command === CMD_REQ_LIST_OK) {
+            const data = JSON.parse(packet.payloadString);
+            state.pendingRequests = (data.pending || []).filter(r => r.requestId !== state.myId);
+            renderPendingRequests();
+        }
+        else if (packet.command === CMD_REQ_SEND_OK) {
+            const data = JSON.parse(packet.payloadString);
+            if (state.resolvedProfile && state.resolvedProfile.userId === data.userId) {
+                state.resolvedProfile.friendStatus = 'pending';
+                renderResolvedProfile(state.resolvedProfile);
+            }
+        }
+        else if (packet.command === CMD_REQ_RECEIVED) {
+            const data = JSON.parse(packet.payloadString);
+            addPendingRequest({ requestId: data.requestId, fromId: data.fromId, fromUsername: data.fromUsername, note: data.note || '' });
+        }
+        else if (packet.command === CMD_REQ_ACCEPTED) {
+            const data = JSON.parse(packet.payloadString);
             const peerId = data.userId;
-
-            let chat = getOrCreateChat(peerId);
+            const chat = getOrCreateChat(peerId);
             chat.username = data.username;
-
-            openChat(peerId);
-
-            if (!chat.isSecure && !chat.dhKeyPair) {
-                chat.dhKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
-                await persistKeys();
-
-                const myPub = await crypto.subtle.exportKey("raw", chat.dhKeyPair.publicKey);
-                const initPacket = buildPacket(CMD_DH_INIT, peerId, state.myId, JSON.stringify({ publicKey: Array.from(new Uint8Array(myPub)), username: state.myUsername }));
-                state.ws.send(obfuscate(initPacket));
+            removePendingRequest(peerId);
+            renderChatList();
+            if (state.resolvedProfile && state.resolvedProfile.userId === peerId) {
+                state.resolvedProfile.friendStatus = 'friends';
+                renderResolvedProfile(state.resolvedProfile);
+            }
+        }
+        else if (packet.command === CMD_REQ_DECLINED) {
+            const data = JSON.parse(packet.payloadString);
+            if (state.resolvedProfile && state.resolvedProfile.userId === data.userId) {
+                state.resolvedProfile.friendStatus = 'none';
+                renderResolvedProfile(state.resolvedProfile);
             }
         }
         else if (packet.command === CMD_DH_INIT) {
@@ -192,13 +229,29 @@ state.ws.onmessage = async (event) => {
             renderChatList();
         }
         else if (packet.command === CMD_TYPING) {
-            const chat = state.chats.get(sender);
-            if (!chat) return;
-            chat.typing = true;
-            clearTimeout(chat._typingTimer);
-            chat._typingTimer = setTimeout(() => { chat.typing = false; renderChatList(); }, 3000);
-            if (state.currentActiveChat === sender) showTypingIndicator();
-            renderChatList();
+            // Check if it's a group typing packet
+            let groupTyping = null;
+            try { if (packet.payloadString) groupTyping = JSON.parse(packet.payloadString); } catch(e) {}
+
+            if (groupTyping && groupTyping.groupId) {
+                const groupPeerId = 'group_' + groupTyping.groupId;
+                const chat = state.chats.get(groupPeerId);
+                if (!chat) return;
+                chat.typingUser = groupTyping.username || `User ${packet.senderId}`;
+                chat.typing = true;
+                clearTimeout(chat._typingTimer);
+                chat._typingTimer = setTimeout(() => { chat.typing = false; chat.typingUser = null; renderChatList(); }, 3000);
+                if (state.currentActiveChat === groupPeerId) showTypingIndicator(chat.typingUser);
+                renderChatList();
+            } else {
+                const chat = state.chats.get(sender);
+                if (!chat) return;
+                chat.typing = true;
+                clearTimeout(chat._typingTimer);
+                chat._typingTimer = setTimeout(() => { chat.typing = false; renderChatList(); }, 3000);
+                if (state.currentActiveChat === sender) showTypingIndicator();
+                renderChatList();
+            }
         }
         else if (packet.command === CMD_READ) {
             let chat = getOrCreateChat(sender);
@@ -214,6 +267,7 @@ state.ws.onmessage = async (event) => {
             const { groupId, name, description, avatarUrl, members, isFeed, creatorId } = payload;
             const groupPeerId = 'group_' + groupId;
             state.chats.set(groupPeerId, {
+                peerId: groupPeerId,
                 isGroup: true,
                 isFeed: isFeed,
                 creatorId: creatorId,
@@ -260,13 +314,21 @@ state.ws.onmessage = async (event) => {
             });
 
             if (state.currentActiveChat === groupPeerId) {
-                const readPacket = buildPacket(CMD_GROUP_READ, 0, state.myId, JSON.stringify({ groupId, lastReadMsgId: messageId }));
-                state.ws.send(obfuscate(readPacket));
-                renderMessages(groupPeerId);
+                appendMessage(groupPeerId, chat.messages[chat.messages.length - 1]);
+                const groupReadPacket = buildPacket(CMD_GROUP_READ, 0, state.myId, JSON.stringify({ groupId: chat.groupId, lastReadMsgId: chat.messages[chat.messages.length - 1].id }));
+                state.ws.send(obfuscate(groupReadPacket));
             } else {
                 chat.unreadCount++;
             }
+            await persistKeys();
             renderChatList();
+        }
+        else if (packet.command === CMD_LINK_PREVIEW_RES) {
+            const data = JSON.parse(packet.payloadString);
+            if (state.pendingPreviewCallback) {
+                state.pendingPreviewCallback(data.url ? data : null);
+                state.pendingPreviewCallback = null;
+            }
         }
         else if (packet.command === CMD_MSG_DELETE) {
             const payload = JSON.parse(packet.payloadString);
@@ -314,7 +376,19 @@ state.ws.onmessage = async (event) => {
 export async function persistKeys() {
     const exportableKeys = {};
     for (const [peerId, chat] of state.chats.entries()) {
-        if (chat.isGroup) continue; 
+        if (chat.isGroup) {
+            // Save group messages to localStorage (no crypto keys needed)
+            exportableKeys[peerId] = {
+                isGroup: true,
+                groupId: chat.groupId,
+                username: chat.username,
+                isFeed: chat.isFeed,
+                creatorId: chat.creatorId,
+                members: chat.members,
+                messages: chat.messages
+            };
+            continue;
+        }
         let exportable = { username: chat.username, isSecure: chat.isSecure, messages: chat.messages };
         if (chat.dhKeyPair) {
             const priv = await crypto.subtle.exportKey("pkcs8", chat.dhKeyPair.privateKey);
@@ -361,6 +435,30 @@ export async function loadPersistedKeys() {
         const exportableKeys = JSON.parse(new TextDecoder().decode(decryptedStore));
 
         for (const [peerIdStr, dataObj] of Object.entries(exportableKeys)) {
+            if (dataObj.isGroup) {
+                // Restore group chat
+                const groupPeerId = peerIdStr;
+                if (!state.chats.has(groupPeerId)) {
+                    state.chats.set(groupPeerId, {
+                        peerId: groupPeerId,
+                        isGroup: true,
+                        groupId: dataObj.groupId,
+                        username: dataObj.username,
+                        isFeed: dataObj.isFeed,
+                        creatorId: dataObj.creatorId,
+                        members: dataObj.members || [],
+                        messages: dataObj.messages || [],
+                        unreadCount: 0
+                    });
+                } else {
+                    // Merge: keep existing messages, update meta
+                    const existing = state.chats.get(groupPeerId);
+                    if (!existing.messages || existing.messages.length === 0) {
+                        existing.messages = dataObj.messages || [];
+                    }
+                }
+                continue;
+            }
             const peerId = parseInt(peerIdStr);
             if (isNaN(peerId)) continue;
             const chat = getOrCreateChat(peerId);
@@ -386,7 +484,7 @@ export async function loadPersistedKeys() {
     }
 }
 
-document.getElementById('btn-new-chat').onclick = () => {
+const startNewChat = () => {
     const username = document.getElementById('new-chat-input').value.trim();
     if (!username || username === state.myUsername) return;
     document.getElementById('new-chat-input').value = '';
@@ -396,12 +494,15 @@ document.getElementById('btn-new-chat').onclick = () => {
 };
 
 document.getElementById('new-chat-input').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') document.getElementById('btn-new-chat').click();
+    if (e.key === 'Enter') startNewChat();
 });
 
 import { setupChatListUI } from '../ui/chatList.js';
 setupChatListUI();
 setupAuth();
 setupMessageUI();
+setupFriendsUI();
+setupPolls();
+window.castVote = castVote;
 setupModals();
 initCallUI();

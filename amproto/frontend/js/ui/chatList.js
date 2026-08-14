@@ -77,7 +77,8 @@ export function renderChatList() {
         const lastTime = last ? formatListTime(last.time) : '';
 
         let preview;
-        if (chat.typing) preview = `<span class="typing-text">typing...</span>`;
+        if (chat.typing && chat.typingUser) preview = `<span class="typing-text">${escapeHtml(chat.typingUser)} is typing...</span>`;
+        else if (chat.typing) preview = `<span class="typing-text">typing...</span>`;
         else if (last) preview = `${chat.isGroup && last.senderUsername ? escapeHtml(last.senderUsername) + ': ' : ''}${escapeHtml(last.text)}`;
         else if (chat.isGroup) preview = 'Space created';
         else if (chat.isSecure) preview = 'Encrypted chat';

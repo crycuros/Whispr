@@ -2,6 +2,30 @@ import { state } from '../core/store.js';
 import { CMD_USER_UPDATE, CMD_GROUP_CREATE, buildPacket, obfuscate } from '../core/amproto.js';
 import { initials, avatarColor, escapeHtml } from './chatList.js';
 
+function updateCustomSelectUI(select) {
+    if (!select) return;
+    const wrapper = select.previousElementSibling;
+    if (wrapper && wrapper.classList.contains('custom-select-wrapper')) {
+        const selectedOpt = select.options[select.selectedIndex];
+        if (selectedOpt) {
+            wrapper.querySelector('.custom-select-trigger span').innerText = selectedOpt.text;
+            wrapper.querySelectorAll('.custom-option').forEach(o => {
+                o.classList.toggle('selected', o.dataset.value === select.value);
+            });
+        }
+    }
+}
+
+function updateSliderBackground(slider) {
+    if (!slider) return;
+    const min = parseFloat(slider.min) || 0;
+    const max = parseFloat(slider.max) || 100;
+    const val = parseFloat(slider.value) || 0;
+    const p = Math.max(0, Math.min(1, (val - min) / (max - min)));
+    const thumb = 16;
+    slider.style.backgroundSize = `calc(${p * 100}% - ${p * thumb}px + ${thumb / 2}px) 100%`;
+}
+
 export function setupModals() {
     const settingsPanel = document.getElementById('panel-settings');
     const btnSettings = document.getElementById('btn-settings');
@@ -14,6 +38,7 @@ export function setupModals() {
     const prefFontScale = document.getElementById('pref-font-scale');
     const prefMsgSpace = document.getElementById('pref-msg-space');
     const prefZoom = document.getElementById('pref-zoom');
+    const prefPrivacy = document.getElementById('pref-privacy');
     const prefEmbeds = document.getElementById('pref-embeds');
     const prefReactions = document.getElementById('pref-reactions');
     const prefAutoplayGif = document.getElementById('pref-autoplay-gif');
@@ -26,6 +51,7 @@ export function setupModals() {
             fontScale: prefFontScale.value,
             msgSpace: prefMsgSpace.value,
             zoom: prefZoom.value,
+            privacy: prefPrivacy.value,
             embeds: prefEmbeds.checked,
             reactions: prefReactions.checked,
             autoplayGif: prefAutoplayGif.checked,
@@ -35,20 +61,6 @@ export function setupModals() {
         
         const updatePacket = buildPacket(CMD_USER_UPDATE, 0, state.myId, JSON.stringify({ preferences: state.myPreferences }));
         if (state.myId && state.ws) state.ws.send(obfuscate(updatePacket));
-    }
-
-    function updateCustomSelectUI(select) {
-        if (!select) return;
-        const wrapper = select.previousElementSibling;
-        if (wrapper && wrapper.classList.contains('custom-select-wrapper')) {
-            const selectedOpt = select.options[select.selectedIndex];
-            if (selectedOpt) {
-                wrapper.querySelector('.custom-select-trigger span').innerText = selectedOpt.text;
-                wrapper.querySelectorAll('.custom-option').forEach(o => {
-                    o.classList.toggle('selected', o.dataset.value === select.value);
-                });
-            }
-        }
     }
 
     function initCustomSelects() {
@@ -107,14 +119,8 @@ export function setupModals() {
     }
     initCustomSelects();
 
-    function updateSliderBackground(slider) {
-        if (!slider) return;
-        const min = parseFloat(slider.min) || 0;
-        const max = parseFloat(slider.max) || 100;
-        const val = parseFloat(slider.value) || 0;
-        const percentage = ((val - min) / (max - min)) * 100;
-        slider.style.backgroundSize = `${percentage}% 100%`;
-    }
+    updateSliderBackground(prefFontScale);
+    updateSliderBackground(prefMsgSpace);
 
     [prefTheme, prefDisplay].forEach(el => el.addEventListener('change', savePreferences));
     [prefFontScale, prefMsgSpace].forEach(el => el.addEventListener('input', (e) => {
@@ -122,6 +128,7 @@ export function setupModals() {
         savePreferences();
     }));
     prefZoom.addEventListener('change', savePreferences);
+    if (prefPrivacy) prefPrivacy.addEventListener('change', savePreferences);
     [prefEmbeds, prefReactions, prefAutoplayGif, prefReducedMotion].forEach(el => el.addEventListener('change', savePreferences));
 
     const savedColor = localStorage.getItem('whispr_accent_color');
@@ -311,6 +318,7 @@ export function applyPreferences(prefs) {
     const prefFontScale = document.getElementById('pref-font-scale');
     const prefMsgSpace = document.getElementById('pref-msg-space');
     const prefZoom = document.getElementById('pref-zoom');
+    const prefPrivacy = document.getElementById('pref-privacy');
     const prefEmbeds = document.getElementById('pref-embeds');
     const prefReactions = document.getElementById('pref-reactions');
     const prefAutoplayGif = document.getElementById('pref-autoplay-gif');
@@ -321,6 +329,7 @@ export function applyPreferences(prefs) {
     if (prefs.fontScale) { prefFontScale.value = prefs.fontScale; }
     if (prefs.msgSpace) { prefMsgSpace.value = prefs.msgSpace; }
     if (prefs.zoom) { prefZoom.value = prefs.zoom; }
+    if (prefs.privacy) { prefPrivacy.value = prefs.privacy; }
     if (prefs.embeds !== undefined) prefEmbeds.checked = prefs.embeds;
     if (prefs.reactions !== undefined) prefReactions.checked = prefs.reactions;
     if (prefs.autoplayGif !== undefined) prefAutoplayGif.checked = prefs.autoplayGif;
@@ -333,6 +342,10 @@ export function applyPreferences(prefs) {
     if (prefs.fontScale) document.documentElement.style.setProperty('--chat-font-size', prefs.fontScale + 'px');
     if (prefs.msgSpace) document.documentElement.style.setProperty('--chat-msg-spacing', prefs.msgSpace + 'px');
     if (prefs.zoom) document.documentElement.style.setProperty('--app-zoom', prefs.zoom);
+
+    [prefTheme, prefDisplay, prefZoom, prefPrivacy].forEach(updateCustomSelectUI);
+    updateSliderBackground(prefFontScale);
+    updateSliderBackground(prefMsgSpace);
 }
 
 export function applyThemeColor(color) {

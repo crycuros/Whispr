@@ -1,7 +1,8 @@
 import { state } from '../core/store.js';
 import { initials, avatarColor, escapeHtml, formatTime, dateLabel, whisperIconSVG, renderChatList } from './chatList.js';
-import { CMD_READ, CMD_TYPING, CMD_GROUP_MSG, CMD_ENC_MSG, buildPacket, obfuscate, encryptPayload } from '../core/amproto.js';
+import { CMD_READ, CMD_TYPING, CMD_GROUP_MSG, CMD_GROUP_READ, CMD_ENC_MSG, CMD_DH_INIT, CMD_LINK_PREVIEW_REQ, buildPacket, obfuscate, encryptPayload } from '../core/amproto.js';
 import { persistKeys } from '../core/app.js';
+import { renderPoll } from '../features/polls.js';
 
 export function openChat(peerId) {
     state.currentActiveChat = peerId;
@@ -10,6 +11,7 @@ export function openChat(peerId) {
 
     document.getElementById('empty-state').style.display = 'none';
     document.getElementById('main-chat-area').style.display = 'flex';
+    document.querySelector('.messages-panel')?.classList.remove('mobile-visible');
     document.getElementById('chat-title').innerText = chat.username;
 
     const headerAvatar = document.getElementById('header-avatar');
@@ -27,9 +29,15 @@ export function openChat(peerId) {
         document.getElementById('crypto-status').className = 'status-text text-muted';
     }
 
-    if (chat.unreadCount > 0 && !chat.isGroup) {
-        const readPacket = buildPacket(CMD_READ, peerId, state.myId, "");
-        if (state.ws) state.ws.send(obfuscate(readPacket));
+    if (chat.unreadCount > 0) {
+        if (chat.isGroup) {
+            const lastMsg = chat.messages[chat.messages.length - 1];
+            const readPacket = buildPacket(CMD_GROUP_READ, 0, state.myId, JSON.stringify({ groupId: chat.groupId, lastReadMsgId: lastMsg ? lastMsg.id : 0 }));
+            if (state.ws) state.ws.send(obfuscate(readPacket));
+        } else {
+            const readPacket = buildPacket(CMD_READ, peerId, state.myId, "");
+            if (state.ws) state.ws.send(obfuscate(readPacket));
+        }
         chat.unreadCount = 0;
     }
 
@@ -59,6 +67,46 @@ export function openChat(peerId) {
         btn.disabled = true;
         input.placeholder = "Connecting...";
     }
+
+    const btnPoll = document.getElementById('btn-poll');
+    if (btnPoll) {
+        if (chat.isGroup && !(chat.isFeed && chat.creatorId !== state.myId)) {
+            btnPoll.style.display = 'flex';
+        } else {
+            btnPoll.style.display = 'none';
+        }
+    }
+
+    if (!chat.isGroup && !chat.isSecure && !chat.dhKeyPair && state.ws && state.myId) {
+        ensureHandshake(peerId, chat);
+    }
+}
+
+async function ensureHandshake(peerId, chat) {
+    try {
+        chat.dhKeyPair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
+        await persistKeys();
+        const myPub = await crypto.subtle.exportKey("raw", chat.dhKeyPair.publicKey);
+        const initPacket = buildPacket(CMD_DH_INIT, peerId, state.myId, JSON.stringify({ publicKey: Array.from(new Uint8Array(myPub)), username: state.myUsername }));
+        state.ws.send(obfuscate(initPacket));
+    } catch (e) {
+        console.error("Handshake init failed:", e);
+    }
+}
+
+export function isNarrowLayout() {
+    return window.innerWidth <= 600;
+}
+
+export function syncMobilePanel() {
+    const panel = document.querySelector('.messages-panel');
+    if (!panel) return;
+    const listIsShown = document.getElementById('empty-state') && document.getElementById('empty-state').style.display !== 'none';
+    if (isNarrowLayout() && (!state.currentActiveChat || listIsShown)) {
+        panel.classList.add('mobile-visible');
+    } else {
+        panel.classList.remove('mobile-visible');
+    }
 }
 
 export function renderMessages(peerId) {
@@ -79,19 +127,53 @@ export function renderMessages(peerId) {
             fragment.appendChild(divider);
             lastDay = day;
         }
+        const el = buildMessageElement(msg, chat, peerId);
+        if (el) fragment.appendChild(el);
+    });
 
-        const wrapper = document.createElement('div');
-        wrapper.className = `message-row ${msg.type}`;
+    container.appendChild(fragment);
+    container.scrollTop = container.scrollHeight;
+}
 
-        let messageContent = '';
-        if (msg.imgData) {
-            messageContent = `<img src="${msg.imgData}" style="max-width: 200px; border-radius: 8px; cursor: pointer;">`;
-            if (msg.text) messageContent += `<br>${escapeHtml(msg.text)}`;
-        } else {
-            messageContent = escapeHtml(msg.text);
+export function appendMessage(peerId, msg) {
+    const container = document.getElementById('messages');
+    const chat = state.chats.get(peerId);
+    if (!chat || !container || state.currentActiveChat !== peerId) return;
+    const el = buildMessageElement(msg, chat, peerId);
+    if (!el) return;
+    container.appendChild(el);
+    container.scrollTop = container.scrollHeight;
+}
+
+function buildMessageElement(msg, chat, peerId) {
+        const payloadObj = (msg.text && msg.text.startsWith('{')) ? (() => { try { return JSON.parse(msg.text); } catch(e) { return null; } })() : null;
+        const isPoll = payloadObj && payloadObj.type === 'poll';
+        const isVote = payloadObj && payloadObj.type === 'vote';
+
+        if (isVote) return null;
+
+        const displayString = (payloadObj && payloadObj.text !== undefined) ? payloadObj.text : (msg.text || '');
+        let messageContent = escapeHtml(displayString);
+        if (isPoll) {
+            messageContent = renderPoll(msg, chat, payloadObj);
+        } else if (msg.imgData) {
+            messageContent = `<img src="${msg.imgData}" style="max-width: 250px; border-radius: 8px; cursor: pointer;" onclick="window.open('${msg.imgData}', '_blank')">`;
+        }
+        
+        if (payloadObj && payloadObj.preview && payloadObj.preview.title) {
+            const pv = payloadObj.preview;
+            messageContent += `
+                <div class="link-preview" style="margin-top: 8px; border-left: 3px solid #3b82f6; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; display: flex; flex-direction: column; gap: 4px; cursor: pointer;" onclick="window.open('${pv.url}', '_blank')">
+                    ${pv.image ? `<img src="${pv.image}" style="max-width: 100%; border-radius: 4px; margin-bottom: 4px;">` : ''}
+                    <div style="font-weight: 600; font-size: 0.9em; color: #e5e7eb;">${escapeHtml(pv.title)}</div>
+                    ${pv.description ? `<div style="font-size: 0.8em; color: #9ca3af; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${escapeHtml(pv.description)}</div>` : ''}
+                </div>
+            `;
         }
 
         const invisibleClass = msg.isInvisible ? 'invisible-ink' : '';
+        const wrapper = document.createElement('div');
+        wrapper.className = `message-row ${msg.type}`;
 
         if (msg.type === 'system') {
             wrapper.classList.add('system');
@@ -101,20 +183,25 @@ export function renderMessages(peerId) {
             wrapper.innerHTML = `
                 <div class="row-avatar" style="background:${avatarColor(name)}">${initials(name)}</div>
                 <div class="row-main">
-                    ${chat.isGroup ? `<span class="sender-name" style="color:${avatarColor(msg.senderUsername || chat.username)}">${escapeHtml(msg.senderUsername || chat.username)}</span>` : ''}
-                    <div class="bubble received ${invisibleClass}">${messageContent}</div>
+                    <span class="sender-name" style="color:${avatarColor(name)}">${escapeHtml(name)}</span>
+                    <div class="bubble received ${invisibleClass}">
+                        <div class="ink-wrapper">${messageContent}</div>
+                    </div>
                     <span class="msg-time">${formatTime(msg.time)}</span>
                 </div>
             `;
+            if (!chat.isGroup) wrapper.classList.add('dm');
         } else {
             wrapper.innerHTML = `
                 <div class="sent-group">
-                    <div class="bubble sent ${invisibleClass}">${messageContent}
+                    <div class="bubble sent ${invisibleClass}">
+                        <div class="ink-wrapper">${messageContent}</div>
                         <span class="msg-time-inside">${formatTime(msg.time)}</span>
                     </div>
                     <span class="receipt-badge ${msg.isRead ? 'seen' : ''}">${whisperIconSVG}</span>
                 </div>
             `;
+        }
         if (msg.timer && msg.timer > 0) {
             if (!msg.readTime) {
                 if (msg.type === 'sent') msg.readTime = msg.time;
@@ -123,7 +210,6 @@ export function renderMessages(peerId) {
             
             const timeLeft = Math.max(0, msg.readTime + (msg.timer * 1000) - Date.now());
             if (timeLeft === 0) {
-                // Delete message
                 setTimeout(() => {
                     chat.messages = chat.messages.filter(m => m.id !== msg.id);
                     if (msg.type === 'received') {
@@ -135,17 +221,12 @@ export function renderMessages(peerId) {
                     import('../core/app.js').then(a => a.persistKeys && a.persistKeys());
                     renderMessages(peerId);
                 }, 0);
-                return; // Skip rendering
+                return null;
             }
             
             const timerBadge = `<span style="font-size: 10px; background: rgba(0,0,0,0.5); color: white; padding: 2px 6px; border-radius: 12px; margin-left: 8px;">${Math.ceil(timeLeft/1000)}s left</span>`;
-            if (msg.type === 'received') {
-                wrapper.querySelector('.bubble').innerHTML += timerBadge;
-            } else {
-                wrapper.querySelector('.bubble').innerHTML += timerBadge;
-            }
+            wrapper.querySelector('.bubble').innerHTML += timerBadge;
             
-            // Re-render to update countdown
             if (!window.activeTimers) window.activeTimers = new Set();
             if (!window.activeTimers.has(msg.id)) {
                 window.activeTimers.add(msg.id);
@@ -156,29 +237,20 @@ export function renderMessages(peerId) {
             }
         }
 
-        fragment.appendChild(wrapper);
-    });
-
-    container.appendChild(fragment);
-    container.scrollTop = container.scrollHeight;
+        return wrapper;
 }
 
-export function showTypingIndicator() {
-    const container = document.getElementById('messages');
-    if (!container) return;
-    let indicator = document.getElementById('typing-indicator');
-    if (!indicator) {
-        indicator = document.createElement('div');
-        indicator.id = 'typing-indicator';
-        indicator.className = 'typing-indicator';
-        indicator.innerHTML = '<span></span><span></span><span></span>';
-        container.appendChild(indicator);
-    }
-    indicator.style.display = 'flex';
-    container.scrollTop = container.scrollHeight;
+export function showTypingIndicator(username) {
+    const bar = document.getElementById('typing-status');
+    if (!bar) return;
+    const dots = '<span class="typing-dots"><span></span><span></span><span></span></span>';
+    bar.innerHTML = username
+        ? `${escapeHtml(username)} is typing ${dots}`
+        : `typing ${dots}`;
+    bar.style.display = 'flex';
 
     clearTimeout(state.typingTimeout);
-    state.typingTimeout = setTimeout(() => { indicator.style.display = 'none'; }, 1500);
+    state.typingTimeout = setTimeout(() => { bar.style.display = 'none'; bar.innerHTML = ''; }, 3000);
 }
 
 export function setupMessageUI() {
@@ -195,6 +267,22 @@ export function setupMessageUI() {
     const drawCanvas = document.getElementById('draw-canvas');
     let ctx, isDrawing = false;
     let currentColor = '#000';
+
+    const backToList = document.getElementById('btn-back-to-list');
+    if (backToList) {
+        backToList.onclick = () => {
+            state.currentActiveChat = null;
+            document.getElementById('main-chat-area').style.display = 'none';
+            document.getElementById('empty-state').style.display = 'flex';
+            document.querySelector('.messages-panel')?.classList.add('mobile-visible');
+        };
+    }
+    window.addEventListener('resize', () => {
+        clearTimeout(window.__mobileResizeTimer);
+        window.__mobileResizeTimer = setTimeout(syncMobilePanel, 120);
+    });
+    syncMobilePanel();
+
     if (drawCanvas) {
         ctx = drawCanvas.getContext('2d');
         ctx.lineJoin = 'round';
@@ -205,18 +293,22 @@ export function setupMessageUI() {
             isDrawing = true;
             ctx.beginPath();
             const rect = drawCanvas.getBoundingClientRect();
+            const sx = drawCanvas.width / rect.width;
+            const sy = drawCanvas.height / rect.height;
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            ctx.moveTo(clientX - rect.left, clientY - rect.top);
+            ctx.moveTo((clientX - rect.left) * sx, (clientY - rect.top) * sy);
         };
         const draw = (e) => {
             if (!isDrawing) return;
             e.preventDefault();
             const rect = drawCanvas.getBoundingClientRect();
+            const sx = drawCanvas.width / rect.width;
+            const sy = drawCanvas.height / rect.height;
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
             ctx.strokeStyle = currentColor;
-            ctx.lineTo(clientX - rect.left, clientY - rect.top);
+            ctx.lineTo((clientX - rect.left) * sx, (clientY - rect.top) * sy);
             ctx.stroke();
         };
         const endDraw = () => { isDrawing = false; ctx.closePath(); };
@@ -268,6 +360,7 @@ export function setupMessageUI() {
             localMsg.senderId = state.myId;
             localMsg.senderUsername = state.myUsername;
             chat.messages.push(localMsg);
+            await persistKeys();
             renderMessages(state.currentActiveChat);
             renderChatList();
             
@@ -300,7 +393,28 @@ export function setupMessageUI() {
         if (!text || (!chat.isSecure && !chat.isGroup)) return;
 
         input.value = '';
-        sendMessageData({ text, isInvisible: isInvisibleMode });
+        
+        // Extract URL
+        const urlMatch = text.match(/(https?:\/\/[^\s]+)/i);
+        if (urlMatch) {
+            const url = urlMatch[1];
+            state.pendingPreviewCallback = (previewData) => {
+                const payloadObj = { text, isInvisible: isInvisibleMode };
+                if (previewData) payloadObj.preview = previewData;
+                sendMessageData(payloadObj);
+            };
+            const reqPacket = buildPacket(CMD_LINK_PREVIEW_REQ, 0, state.myId, JSON.stringify({ url }));
+            if (state.ws) state.ws.send(obfuscate(reqPacket));
+            
+            // Timeout in case server doesn't respond
+            setTimeout(() => {
+                if (state.pendingPreviewCallback) {
+                    state.pendingPreviewCallback(null);
+                }
+            }, 3000);
+        } else {
+            sendMessageData({ text, isInvisible: isInvisibleMode });
+        }
     };
 
     document.getElementById('msg-input').addEventListener('keypress', (e) => {
@@ -310,13 +424,18 @@ export function setupMessageUI() {
     document.getElementById('msg-input').addEventListener('input', () => {
         if (!state.currentActiveChat) return;
         const chat = state.chats.get(state.currentActiveChat);
-        if (!chat.isSecure || chat.isGroup) return;
+        if (!chat.isSecure && !chat.isGroup) return;
 
         const now = Date.now();
         if (now - state.lastTypingSent > 500) {
             state.lastTypingSent = now;
-            const typingPacket = buildPacket(CMD_TYPING, state.currentActiveChat, state.myId, "");
-            if (state.ws) state.ws.send(obfuscate(typingPacket));
+            if (chat.isGroup) {
+                const typingPacket = buildPacket(CMD_TYPING, 0, state.myId, JSON.stringify({ groupId: chat.groupId, username: state.myUsername }));
+                if (state.ws) state.ws.send(obfuscate(typingPacket));
+            } else {
+                const typingPacket = buildPacket(CMD_TYPING, state.currentActiveChat, state.myId, "");
+                if (state.ws) state.ws.send(obfuscate(typingPacket));
+            }
         }
     });
 }

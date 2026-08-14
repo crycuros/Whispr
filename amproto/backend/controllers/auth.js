@@ -48,10 +48,23 @@ exports.handleLogin = (ws, packet, clients, db, setMyIdCallback) => {
                     return;
                 }
                 
-                const [salt, storedHash] = row.password.split(':');
-                const hashBuffer = crypto.scryptSync(password, salt, 64);
+                const parts = row.password.split(':');
+                let isValid = false;
+
+                if (parts.length === 2) {
+                    const [salt, storedHash] = parts;
+                    const hashBuffer = crypto.scryptSync(password, salt, 64);
+                    isValid = (hashBuffer.toString('hex') === storedHash);
+                } else {
+                    // Fallback for old accounts before the security patch
+                    if (row.password === password) {
+                        isValid = true; // Plaintext (e.g. user2)
+                    } else if (row.password === crypto.createHash('sha256').update(password).digest('hex')) {
+                        isValid = true; // Legacy SHA256 (e.g. cyberplays)
+                    }
+                }
                 
-                if (hashBuffer.toString('hex') !== storedHash) {
+                if (!isValid) {
                     const errPacket = AMProto.buildPacket(AMProto.CMD_ERROR, packet.senderId, 0, JSON.stringify({ message: 'Login failed' }));
                     ws.send(AMProto.obfuscate(errPacket));
                 } else {
@@ -101,18 +114,43 @@ function completeLogin(ws, packet, clients, db, setMyIdCallback, row, sessionTok
         }
     });
 
-    // Send unread group messages
-    db.all(`SELECT gm.id, gm.group_id, gm.sender_id, gm.payload FROM group_messages gm 
-            JOIN group_members mem ON gm.group_id = mem.group_id 
-            LEFT JOIN group_read gr ON gm.group_id = gr.group_id AND gr.user_id = ?
-            WHERE mem.user_id = ? AND gm.created_at >= mem.joined_at 
-            AND (gr.last_read IS NULL OR gm.id > gr.last_read)`, [myId, myId], (err, groupRows) => {
-        if (!err && groupRows && groupRows.length > 0) {
-            groupRows.forEach(gMsg => {
-                const payload = JSON.stringify({ groupId: gMsg.group_id, senderId: gMsg.sender_id, text: gMsg.payload, messageId: gMsg.id });
-                const relayPacket = AMProto.buildPacket(AMProto.CMD_GROUP_MSG_RELAY, myId, gMsg.sender_id, payload);
-                ws.send(AMProto.obfuscate(relayPacket));
+    // Sync groups: send CMD_GROUP_INFO_OK for all groups this user belongs to
+    db.all(`
+        SELECT g.id, g.name, g.description, g.avatar_url, g.is_feed, g.created_by,
+               (SELECT GROUP_CONCAT(user_id) FROM group_members WHERE group_id = g.id) as member_ids
+        FROM groups g
+        JOIN group_members gm ON g.id = gm.group_id
+        WHERE gm.user_id = ?`, [myId], (err, groupList) => {
+        if (!err && groupList) {
+            groupList.forEach(g => {
+                const members = g.member_ids ? g.member_ids.split(',').map(Number) : [];
+                const infoPayload = JSON.stringify({
+                    groupId: g.id,
+                    name: g.name,
+                    description: g.description,
+                    avatarUrl: g.avatar_url,
+                    members: members,
+                    isFeed: !!g.is_feed,
+                    creatorId: g.created_by
+                });
+                const infoPacket = AMProto.buildPacket(AMProto.CMD_GROUP_INFO_OK, myId, 0, infoPayload);
+                ws.send(AMProto.obfuscate(infoPacket));
             });
         }
+
+        // Send unread group messages
+        db.all(`SELECT gm.id, gm.group_id, gm.sender_id, gm.text as payload FROM group_messages gm 
+                JOIN group_members mem ON gm.group_id = mem.group_id 
+                LEFT JOIN group_read gr ON gm.group_id = gr.group_id AND gr.user_id = ?
+                WHERE mem.user_id = ? AND gm.sent_at >= mem.joined_at 
+                AND (gr.last_read IS NULL OR gm.id > gr.last_read)`, [myId, myId], (err, groupRows) => {
+            if (!err && groupRows && groupRows.length > 0) {
+                groupRows.forEach(gMsg => {
+                    const payload = JSON.stringify({ groupId: gMsg.group_id, senderId: gMsg.sender_id, text: gMsg.payload, messageId: gMsg.id });
+                    const relayPacket = AMProto.buildPacket(AMProto.CMD_GROUP_MSG_RELAY, myId, gMsg.sender_id, payload);
+                    ws.send(AMProto.obfuscate(relayPacket));
+                });
+            }
+        });
     });
 }

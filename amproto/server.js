@@ -9,7 +9,9 @@ const authController = require('./backend/controllers/auth');
 const messagesController = require('./backend/controllers/messages');
 const groupsController = require('./backend/controllers/groups');
 const usersController = require('./backend/controllers/users');
+const friendsController = require('./backend/controllers/friends');
 const vaultController = require('./backend/controllers/vault');
+const linkPreview = require('./backend/utils/linkPreview');
 
 const PORT = 3000;
 const clients = new Map(); // Map of clientID -> ws connection
@@ -62,6 +64,18 @@ wss.on('connection', (ws) => {
                 case AMProto.CMD_USER_UPDATE:
                     usersController.handleUserUpdate(ws, packet, db);
                     break;
+                case AMProto.CMD_REQ_SEND:
+                    friendsController.handleReqSend(ws, packet, clients, db);
+                    break;
+                case AMProto.CMD_REQ_LIST:
+                    friendsController.handleReqList(ws, packet, db);
+                    break;
+                case AMProto.CMD_REQ_ACCEPT:
+                    friendsController.handleReqAccept(ws, packet, clients, db);
+                    break;
+                case AMProto.CMD_REQ_DECLINE:
+                    friendsController.handleReqDecline(ws, packet, clients, db);
+                    break;
                 case AMProto.CMD_ENC_MSG:
                     messagesController.handleEncMsg(ws, packet, rawData, clients, db);
                     break;
@@ -86,16 +100,48 @@ wss.on('connection', (ws) => {
                 case AMProto.CMD_VAULT_DOWNLOAD:
                     vaultController.handleVaultDownload(ws, packet, clients, db);
                     break;
+                case AMProto.CMD_LINK_PREVIEW_REQ:
+                    const { url } = JSON.parse(packet.payloadString);
+                    linkPreview.fetchPreview(url).then(preview => {
+                        const resPacket = AMProto.buildPacket(AMProto.CMD_LINK_PREVIEW_RES, packet.senderId, 0, JSON.stringify(preview || {}));
+                        ws.send(AMProto.obfuscate(resPacket));
+                    });
+                    break;
                 default:
                     // Relay other commands (DH_INIT, DH_REPLY, TYPING, READ)
                     const targetId = packet.targetId;
-                    if (clients.has(targetId)) {
-                        console.log(`[Server] Relaying command ${packet.command} from ${myId || packet.senderId} to ${targetId}`);
-                        const targetWs = clients.get(targetId);
-                        
-                        if (targetWs.readyState === WebSocket.OPEN) {
-                            // Forward the raw, obfuscated packet
-                            targetWs.send(rawData);
+                    // Group typing: targetId = 0, payload has groupId
+                    if (packet.command === AMProto.CMD_TYPING && targetId === 0 && packet.payloadString) {
+                        try {
+                            const { groupId } = JSON.parse(packet.payloadString);
+                            if (groupId) {
+                                db.all(`SELECT user_id FROM group_members WHERE group_id = ?`, [groupId], (err, rows) => {
+                                    if (!err && rows) {
+                                        rows.forEach(r => {
+                                            if (r.user_id !== packet.senderId && clients.has(r.user_id)) {
+                                                const tw = clients.get(r.user_id);
+                                                if (tw.readyState === WebSocket.OPEN) tw.send(rawData);
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                        } catch(e) {}
+                    } else if (clients.has(targetId)) {
+                        // Only allow ECDH handshake with friends (or existing chat partners)
+                        if (packet.command === AMProto.CMD_DH_INIT || packet.command === AMProto.CMD_DH_REPLY) {
+                            friendsController.canMessage(db, packet.senderId, targetId, (allowed) => {
+                                if (!allowed) return;
+                                const targetWs = clients.get(targetId);
+                                if (targetWs.readyState === WebSocket.OPEN) {
+                                    targetWs.send(rawData);
+                                }
+                            });
+                        } else {
+                            const targetWs = clients.get(targetId);
+                            if (targetWs.readyState === WebSocket.OPEN) {
+                                targetWs.send(rawData);
+                            }
                         }
                     } else {
                         console.log(`[Server] Target ${targetId} not found or offline.`);
@@ -108,7 +154,7 @@ wss.on('connection', (ws) => {
     });
 
     ws.on('close', () => {
-        if (myId) {
+        if (myId && clients.get(myId) === ws) {
             clients.delete(myId);
             console.log(`[Server] Web Client ${myId} disconnected`);
         }

@@ -40,28 +40,38 @@ exports.handleGroupMsg = (ws, packet, clients, db) => {
     
     db.get(`SELECT g.is_feed, gm.role FROM groups g JOIN group_members gm ON g.id = gm.group_id WHERE g.id = ? AND gm.user_id = ?`, [groupId, senderId], (err, row) => {
         if (err || !row) {
+            console.log(`[Group] ${senderId} not member of ${groupId}`);
             const errPacket = AMProto.buildPacket(AMProto.CMD_ERROR, senderId, 0, JSON.stringify({ message: 'Not a member of group' }));
             ws.send(AMProto.obfuscate(errPacket));
         } else if (row.is_feed === 1 && row.role !== 'admin') {
             const errPacket = AMProto.buildPacket(AMProto.CMD_ERROR, senderId, 0, JSON.stringify({ message: 'Only admins can post in feeds' }));
             ws.send(AMProto.obfuscate(errPacket));
         } else {
-            db.run(`INSERT INTO group_messages (group_id, sender_id, payload) VALUES (?, ?, ?)`, [groupId, senderId, text], function(err) {
+            console.log(`[Group] Insert msg from ${senderId} in ${groupId}`);
+            db.run(`INSERT INTO group_messages (group_id, sender_id, text) VALUES (?, ?, ?)`, [groupId, senderId, text], function(err) {
+                if (err) console.error('[Group] INSERT error:', err.message);
                 if (!err) {
                     const messageId = this.lastID;
                     
                     db.all(`SELECT user_id FROM group_members WHERE group_id = ?`, [groupId], (err, rows) => {
                         if (!err && rows) {
                             const payload = JSON.stringify({ groupId, senderId, text, messageId });
+                            const connectedClients = [...clients.keys()];
+                            console.log(`[Group] Relay to members of ${groupId}:`, rows.map(r=>r.user_id), '| Online:', connectedClients);
                             
                             rows.forEach(memberRow => {
                                 const memberId = memberRow.user_id;
                                 if (memberId !== senderId && clients.has(memberId)) {
                                     const targetWs = clients.get(memberId);
                                     if (targetWs.readyState === WebSocket.OPEN) {
+                                        console.log(`[Group] Relaying to ${memberId}`);
                                         const relayPacket = AMProto.buildPacket(AMProto.CMD_GROUP_MSG_RELAY, memberId, senderId, payload);
                                         targetWs.send(AMProto.obfuscate(relayPacket));
+                                    } else {
+                                        console.log(`[Group] Socket for ${memberId} not open`);
                                     }
+                                } else if (memberId !== senderId) {
+                                    console.log(`[Group] Member ${memberId} is offline`);
                                 }
                             });
                         }

@@ -6,6 +6,8 @@ export const state = {
     myBio: '',
     myPreferences: {},
     chats: new Map(), // peerId -> Chat Object
+    pendingRequests: [], // incoming friend requests
+    resolvedProfile: null, // last resolved search profile
     currentActiveChat: null,
     groupSeq: 1,
     pendingSpaceMembers: [],

@@ -23,6 +23,17 @@ export const CMD_MSG_DELETE = 0x1A;
 export const CMD_USER_UPDATE = 0x20;
 export const CMD_USER_UPDATE_OK = 0x21;
 
+// Friend request commands
+export const CMD_REQ_SEND = 0x22;
+export const CMD_REQ_SEND_OK = 0x23;
+export const CMD_REQ_RECEIVED = 0x24;
+export const CMD_REQ_ACCEPT = 0x25;
+export const CMD_REQ_DECLINE = 0x26;
+export const CMD_REQ_ACCEPTED = 0x27;
+export const CMD_REQ_DECLINED = 0x28;
+export const CMD_REQ_LIST = 0x29;
+export const CMD_REQ_LIST_OK = 0x2A;
+
 // WebRTC Signaling
 export const CMD_RTC_CALL = 0x30;
 export const CMD_RTC_ANSWER = 0x31;
@@ -37,6 +48,9 @@ export const CMD_VAULT_LIST = 0x42;
 export const CMD_VAULT_LIST_OK = 0x43;
 export const CMD_VAULT_DOWNLOAD = 0x44;
 export const CMD_VAULT_DOWNLOAD_OK = 0x45;
+
+export const CMD_LINK_PREVIEW_REQ = 0x60;
+export const CMD_LINK_PREVIEW_RES = 0x61;
 
 export function buildPacket(command, target, sender, payloadString) {
     const payloadBuffer = new TextEncoder().encode(payloadString);

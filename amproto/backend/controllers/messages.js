@@ -1,27 +1,37 @@
 const WebSocket = require('ws');
+const friendsController = require('./friends');
 // Note: We don't need to require AMProto here unless we build packets. We don't build one, just relay. 
 
 exports.handleEncMsg = (ws, packet, rawData, clients, db) => {
     const targetId = packet.targetId;
     const senderId = packet.senderId;
     const payloadStr = packet.payloadString;
-    
-    db.run(`INSERT INTO messages (sender_id, receiver_id, payload, is_read) VALUES (?, ?, ?, ?)`, 
-        [senderId, targetId, payloadStr, clients.has(targetId) ? 1 : 0], 
-        function(err) {
-            if (err) console.error("Error saving message", err);
+
+    friendsController.canMessage(db, senderId, targetId, (allowed) => {
+        if (!allowed) {
+            const AMProto = require('../core/amproto');
+            const errPacket = AMProto.buildPacket(AMProto.CMD_ERROR, senderId, 0, JSON.stringify({ message: 'Only friends can message you. Add this user as a friend first.' }));
+            ws.send(AMProto.obfuscate(errPacket));
+            return;
         }
-    );
-    
-    if (clients.has(targetId)) {
-        console.log(`[Server] Relaying CMD_ENC_MSG from ${senderId} to ${targetId}`);
-        const targetWs = clients.get(targetId);
-        if (targetWs.readyState === WebSocket.OPEN) {
-            targetWs.send(rawData);
+
+        db.run(`INSERT INTO messages (sender_id, receiver_id, payload, is_read) VALUES (?, ?, ?, ?)`, 
+            [senderId, targetId, payloadStr, clients.has(targetId) ? 1 : 0], 
+            function(err) {
+                if (err) console.error("Error saving message", err);
+            }
+        );
+        
+        if (clients.has(targetId)) {
+            console.log(`[Server] Relaying CMD_ENC_MSG from ${senderId} to ${targetId}`);
+            const targetWs = clients.get(targetId);
+            if (targetWs.readyState === WebSocket.OPEN) {
+                targetWs.send(rawData);
+            }
+        } else {
+            console.log(`[Server] Target ${targetId} offline. Message saved.`);
         }
-    } else {
-        console.log(`[Server] Target ${targetId} offline. Message saved.`);
-    }
+    });
 };
 
 exports.handleMsgDelete = (ws, packet, clients, db) => {

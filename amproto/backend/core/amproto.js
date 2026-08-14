@@ -33,6 +33,17 @@ class AMProto {
     static CMD_USER_UPDATE = 0x20;
     static CMD_USER_UPDATE_OK = 0x21;
     
+    // Friend request commands
+    static CMD_REQ_SEND = 0x22;
+    static CMD_REQ_SEND_OK = 0x23;
+    static CMD_REQ_RECEIVED = 0x24;
+    static CMD_REQ_ACCEPT = 0x25;
+    static CMD_REQ_DECLINE = 0x26;
+    static CMD_REQ_ACCEPTED = 0x27;
+    static CMD_REQ_DECLINED = 0x28;
+    static CMD_REQ_LIST = 0x29;
+    static CMD_REQ_LIST_OK = 0x2A;
+    
     // WebRTC Signaling
     static CMD_RTC_CALL = 0x30;
     static CMD_RTC_ANSWER = 0x31;
@@ -47,6 +58,10 @@ class AMProto {
     static CMD_VAULT_LIST_OK = 0x43;
     static CMD_VAULT_DOWNLOAD = 0x44;
     static CMD_VAULT_DOWNLOAD_OK = 0x45;
+    
+    // Link Previews
+    static CMD_LINK_PREVIEW_REQ = 0x60;
+    static CMD_LINK_PREVIEW_RES = 0x61;
     
     // Obfuscation Mask (Simple XOR to hide the header from DPI)
     // In production, this would be a dynamic AES-CTR stream like MTProto FakeTLS.

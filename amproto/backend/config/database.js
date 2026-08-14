@@ -51,6 +51,14 @@ db.serialize(() => {
         last_read INTEGER DEFAULT 0,
         PRIMARY KEY (group_id, user_id)
     )`);
+    db.run(`CREATE TABLE IF NOT EXISTS friend_requests (
+        user_id INTEGER,
+        target_id INTEGER,
+        status TEXT DEFAULT 'pending',
+        note TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, target_id)
+    )`);
     db.run(`CREATE TABLE IF NOT EXISTS file_vault (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
