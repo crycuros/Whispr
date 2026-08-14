@@ -1,5 +1,5 @@
 import { state } from '../core/store.js';
-import { initials, avatarColor, escapeHtml, formatTime, dateLabel, whisperIconSVG, renderChatList } from './chatList.js';
+import { initials, avatarColor, escapeHtml, formatTime, formatListTime, dateLabel, whisperIconSVG, renderChatList } from './chatList.js';
 import { CMD_READ, CMD_TYPING, CMD_GROUP_MSG, CMD_GROUP_READ, CMD_ENC_MSG, CMD_DH_INIT, CMD_LINK_PREVIEW_REQ, buildPacket, obfuscate, encryptPayload } from '../core/amproto.js';
 import { persistKeys } from '../core/app.js';
 import { renderPoll } from '../features/polls.js';
@@ -21,12 +21,8 @@ export function openChat(peerId) {
     if (chat.isGroup) {
         document.getElementById('crypto-status').innerText = `${chat.members.length} members`;
         document.getElementById('crypto-status').className = 'status-text text-muted';
-    } else if (chat.isSecure) {
-        document.getElementById('crypto-status').innerText = 'Online';
-        document.getElementById('crypto-status').className = 'status-text text-success';
     } else {
-        document.getElementById('crypto-status').innerText = 'Connecting...';
-        document.getElementById('crypto-status').className = 'status-text text-muted';
+        updateChatStatus(peerId);
     }
 
     if (chat.unreadCount > 0) {
@@ -79,6 +75,24 @@ export function openChat(peerId) {
 
     if (!chat.isGroup && !chat.isSecure && !chat.dhKeyPair && state.ws && state.myId) {
         ensureHandshake(peerId, chat);
+    }
+}
+
+export function updateChatStatus(peerId) {
+    const statusEl = document.getElementById('crypto-status');
+    if (!statusEl || state.currentActiveChat !== peerId) return;
+    const chat = state.chats.get(peerId);
+    if (!chat || chat.isGroup) return;
+    const p = state.presence.get(peerId);
+    if (p && p.online) {
+        statusEl.innerText = 'Present';
+        statusEl.className = 'status-text text-success';
+    } else if (p && p.lastSeen) {
+        statusEl.innerText = `Away (${formatListTime(p.lastSeen)})`;
+        statusEl.className = 'status-text text-muted';
+    } else {
+        statusEl.innerText = 'Connecting...';
+        statusEl.className = 'status-text text-muted';
     }
 }
 

@@ -20,6 +20,7 @@ export const CMD_GROUP_MSG_RELAY = 0x14;
 export const CMD_GROUP_INFO_OK = 0x16;
 export const CMD_GROUP_READ = 0x19;
 export const CMD_MSG_DELETE = 0x1A;
+export const CMD_PRESENCE = 0x1B;
 export const CMD_USER_UPDATE = 0x20;
 export const CMD_USER_UPDATE_OK = 0x21;
 

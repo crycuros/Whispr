@@ -1,5 +1,6 @@
 const AMProto = require('../core/amproto');
 const crypto = require('crypto');
+const friendsController = require('./friends');
 
 exports.handleRegister = (ws, packet, clients, db) => {
     try {
@@ -86,6 +87,9 @@ function completeLogin(ws, packet, clients, db, setMyIdCallback, row, sessionTok
     setMyIdCallback(myId);
     clients.set(myId, ws);
     console.log(`[Server] Web Client ID ${myId} logged in`);
+
+    friendsController.sendMyFriendPresence(ws, myId, clients, db);
+    friendsController.broadcastPresence(clients, db, myId, true, null);
     
     let prefs = {};
     if (row.preferences) {

@@ -124,6 +124,7 @@ exports.handleReqAccept = (ws, packet, clients, db) => {
         db.get(`SELECT username, bio, avatar_url FROM users WHERE id = ?`, [requestId], (e, requester) => {
             const requesterName = requester ? requester.username : `User ${requestId}`;
             sendPacket(ws, AMProto.CMD_REQ_ACCEPTED, myId, requestId, { userId: requestId, username: requesterName });
+            exports.sendPresenceTo(ws, myId, requestId, clients, db);
 
             db.get(`SELECT username FROM users WHERE id = ?`, [myId], (e2, me) => {
                 const myUsername = me ? me.username : `User ${myId}`;
@@ -131,6 +132,7 @@ exports.handleReqAccept = (ws, packet, clients, db) => {
                     const reqWs = clients.get(requestId);
                     if (reqWs.readyState === WebSocket.OPEN) {
                         sendPacket(reqWs, AMProto.CMD_REQ_ACCEPTED, requestId, myId, { userId: myId, username: myUsername });
+                        exports.sendPresenceTo(reqWs, requestId, myId, clients, db);
                     }
                 }
             });
@@ -178,4 +180,51 @@ exports.canMessage = (db, a, b, cb) => {
             if (err) return cb(false);
             cb((row && (row.friends > 0 || row.history > 0)) || false);
         });
+};
+
+exports.getFriends = (db, userId, cb) => {
+    db.all(`SELECT CASE WHEN user_id = ? THEN target_id ELSE user_id END AS friend_id
+            FROM friend_requests
+            WHERE status = 'accepted' AND (user_id = ? OR target_id = ?)`,
+        [userId, userId, userId], (err, rows) => {
+            cb(err, rows ? rows.map(r => r.friend_id) : []);
+        });
+};
+
+exports.sendPresenceTo = (ws, targetId, subjectId, clients, db) => {
+    const online = clients.has(subjectId);
+    const send = (lastSeen) => {
+        const p = AMProto.buildPacket(AMProto.CMD_PRESENCE, targetId, subjectId, JSON.stringify({ userId: subjectId, online, lastSeen }));
+        ws.send(AMProto.obfuscate(p));
+    };
+    if (online) {
+        send(null);
+    } else {
+        db.get(`SELECT last_seen FROM users WHERE id = ?`, [subjectId], (e, row) => send(row && row.last_seen ? row.last_seen : null));
+    }
+};
+
+exports.broadcastPresence = (clients, db, userId, online, lastSeen) => {
+    exports.getFriends(db, userId, (err, friendIds) => {
+        if (err) return;
+        const payload = JSON.stringify({ userId, online, lastSeen });
+        friendIds.forEach(fid => {
+            if (clients.has(fid)) {
+                const tws = clients.get(fid);
+                if (tws.readyState === WebSocket.OPEN) {
+                    const p = AMProto.buildPacket(AMProto.CMD_PRESENCE, fid, userId, payload);
+                    tws.send(AMProto.obfuscate(p));
+                }
+            }
+        });
+    });
+};
+
+exports.sendMyFriendPresence = (ws, myId, clients, db) => {
+    exports.getFriends(db, myId, (err, friendIds) => {
+        if (err) return;
+        friendIds.forEach(fid => {
+            exports.sendPresenceTo(ws, myId, fid, clients, db);
+        });
+    });
 };

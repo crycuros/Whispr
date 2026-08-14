@@ -28,6 +28,7 @@ class AMProto {
     static CMD_GROUP_INFO_OK = 0x16;
     static CMD_GROUP_READ = 0x19;
     static CMD_MSG_DELETE = 0x1A;
+    static CMD_PRESENCE = 0x1B;
     
     // User commands
     static CMD_USER_UPDATE = 0x20;

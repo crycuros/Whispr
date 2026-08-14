@@ -14,8 +14,14 @@ db.serialize(() => {
         bio TEXT,
         theme_color TEXT,
         preferences TEXT,
-        session_token TEXT
+        session_token TEXT,
+        last_seen INTEGER
     )`);
+    db.all(`PRAGMA table_info(users)`, (err, cols) => {
+        if (!err && cols && !cols.some(c => c.name === 'last_seen')) {
+            db.run(`ALTER TABLE users ADD COLUMN last_seen INTEGER`);
+        }
+    });
     db.run(`CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sender_id INTEGER,

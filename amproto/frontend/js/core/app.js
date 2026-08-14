@@ -1,9 +1,9 @@
 import { state } from './store.js';
-import { CMD_LOGIN, CMD_REGISTER_OK, CMD_ERROR, CMD_LOGIN_OK, CMD_RESOLVE_OK, CMD_DH_INIT, CMD_DH_REPLY, CMD_USER_UPDATE_OK, CMD_ENC_MSG, CMD_TYPING, CMD_READ, CMD_GROUP_CREATE_OK, CMD_GROUP_INFO_OK, CMD_GROUP_MSG_RELAY, CMD_GROUP_READ, CMD_MSG_DELETE, CMD_RTC_CALL, CMD_RTC_ANSWER, CMD_RTC_REJECT, CMD_RTC_END, CMD_RTC_ICE, CMD_VAULT_UPLOAD_OK, CMD_VAULT_LIST_OK, CMD_VAULT_DOWNLOAD_OK, CMD_LINK_PREVIEW_RES, CMD_REQ_SEND_OK, CMD_REQ_RECEIVED, CMD_REQ_ACCEPTED, CMD_REQ_DECLINED, CMD_REQ_LIST, CMD_REQ_LIST_OK, buildPacket, parsePacket, obfuscate, deobfuscate, deriveSharedSecret, decryptPayload } from './amproto.js';
+import { CMD_LOGIN, CMD_REGISTER_OK, CMD_ERROR, CMD_LOGIN_OK, CMD_RESOLVE_OK, CMD_DH_INIT, CMD_DH_REPLY, CMD_USER_UPDATE_OK, CMD_ENC_MSG, CMD_TYPING, CMD_READ, CMD_GROUP_CREATE_OK, CMD_GROUP_INFO_OK, CMD_GROUP_MSG_RELAY, CMD_GROUP_READ, CMD_MSG_DELETE, CMD_PRESENCE, CMD_RTC_CALL, CMD_RTC_ANSWER, CMD_RTC_REJECT, CMD_RTC_END, CMD_RTC_ICE, CMD_VAULT_UPLOAD_OK, CMD_VAULT_LIST_OK, CMD_VAULT_DOWNLOAD_OK, CMD_LINK_PREVIEW_RES, CMD_REQ_SEND_OK, CMD_REQ_RECEIVED, CMD_REQ_ACCEPTED, CMD_REQ_DECLINED, CMD_REQ_LIST, CMD_REQ_LIST_OK, buildPacket, parsePacket, obfuscate, deobfuscate, deriveSharedSecret, decryptPayload } from './amproto.js';
 import { setupAuth, showError } from '../features/auth.js';
 import { setupPolls, castVote } from '../features/polls.js';
 import { renderChatList, getOrCreateChat, initials, avatarColor } from '../ui/chatList.js';
-import { renderMessages, appendMessage, openChat, showTypingIndicator, setupMessageUI } from '../ui/messages.js';
+import { renderMessages, appendMessage, openChat, updateChatStatus, showTypingIndicator, setupMessageUI } from '../ui/messages.js';
 import { setupModals, applyPreferences, applyThemeColor } from '../ui/modals.js';
 import { renderResolvedProfile, renderPendingRequests, addPendingRequest, removePendingRequest, setupFriendsUI } from '../ui/friends.js';
 import * as WebRTC from '../features/webrtc.js';
@@ -339,6 +339,12 @@ state.ws.onmessage = async (event) => {
                 await persistKeys();
                 if (state.currentActiveChat === chatPeer) renderMessages(chatPeer);
             }
+        }
+        else if (packet.command === CMD_PRESENCE) {
+            const data = JSON.parse(packet.payloadString);
+            state.presence.set(data.userId, { online: data.online, lastSeen: data.lastSeen || null });
+            if (state.currentActiveChat === data.userId) updateChatStatus(data.userId);
+            renderChatList();
         }
         else if (packet.command === CMD_RTC_CALL) {
             const payload = JSON.parse(packet.payloadString);

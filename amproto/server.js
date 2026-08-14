@@ -156,6 +156,10 @@ wss.on('connection', (ws) => {
     ws.on('close', () => {
         if (myId && clients.get(myId) === ws) {
             clients.delete(myId);
+            const now = Date.now();
+            db.run(`UPDATE users SET last_seen = ? WHERE id = ?`, [now, myId], () => {
+                friendsController.broadcastPresence(clients, db, myId, false, now);
+            });
             console.log(`[Server] Web Client ${myId} disconnected`);
         }
     });

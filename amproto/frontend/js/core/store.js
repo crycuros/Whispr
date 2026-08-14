@@ -18,5 +18,6 @@ export const state = {
     activeCropElementId: null,
     lastTypingSent: 0,
     typingTimeout: null,
+    presence: new Map(), // userId -> true/false
     ws: null
 };

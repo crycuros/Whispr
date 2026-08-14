@@ -400,8 +400,11 @@ input { font-family: inherit; }
     content: '';
     width: 7px; height: 7px;
     border-radius: 50%;
-    background: var(--green);
+    background: var(--text-muted);
     display: inline-block;
+}
+.status-text.text-success::before {
+    background: var(--green);
 }
 .header-actions { display: flex; gap: clamp(2px, 0.3cqw, 4px); flex-shrink: 0; }
 .ghost-btn {
