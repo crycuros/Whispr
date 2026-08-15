@@ -268,7 +268,7 @@ state.ws.onmessage = async (event) => {
                 state.ws.send(obfuscate(readPacket));
                 renderMessages(sender);
             } else {
-                if (state.currentActiveChat !== sender) chat.unreadCount++;
+                chat.unreadCount++;
                 
                 if (state.myPreferences && state.myPreferences.notifDesktop && window.Notification && Notification.permission === "granted") {
                     let senderName = chat.displayName || `User ${sender}`;
