@@ -402,7 +402,7 @@ export function buildMessageElement(msg, chat, peerId) {
         } else if (msg.file) {
             messageContent = fileBubbleHTML(msg.file);
         } else if (msg.imgData) {
-            messageContent = `<img src="${msg.imgData}" style="max-width: 250px; border-radius: 8px; cursor: pointer;" onclick="window.open('${msg.imgData}', '_blank')">`;
+            messageContent = `<img src="${msg.imgData}" style="cursor: pointer; width: 100%; display: block;" onclick="window.open('${msg.imgData}', '_blank')">`;
         }
         
         const preview = (payloadObj && payloadObj.preview) || msg.preview;
@@ -421,7 +421,8 @@ export function buildMessageElement(msg, chat, peerId) {
             `;
         }
 
-        const invisibleClass = msg.isInvisible ? 'invisible-ink' : '';
+        let invisibleClass = msg.isInvisible ? 'invisible-ink' : '';
+        if ((msg.file && msg.file.thumbnail) || msg.imgData) invisibleClass += ' media-bubble';
         const wrapper = document.createElement('div');
         wrapper.className = `message-row ${msg.type}`;
 

@@ -2768,6 +2768,19 @@ video {
 .premium-msg.ok {
     color: #10b981;
 }
+/* -- Media Bubbles (Images/Videos) -- */
+.bubble.media-bubble {
+    padding: 0 !important;
+    background: transparent !important;
+}
+.bubble.received.media-bubble .file-preview-bubble,
+.bubble.received.media-bubble img {
+    border-radius: 4px var(--bubble-radius) var(--bubble-radius) var(--bubble-radius) !important;
+}
+.bubble.sent.media-bubble .file-preview-bubble,
+.bubble.sent.media-bubble img {
+    border-radius: var(--bubble-radius) var(--bubble-radius) 4px var(--bubble-radius) !important;
+}
 
 /* -- File bubbles -- */
 .file-bubble {
