@@ -46,6 +46,45 @@ function setProgress(uploadId, pct, label) {
     if (lbl) lbl.textContent = label;
 }
 
+async function generateThumbnail(file) {
+    return new Promise((resolve) => {
+        if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) return resolve(null);
+        const url = URL.createObjectURL(file);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const MAX_SIZE = 250;
+
+        const processFrame = (videoOrImg) => {
+            let w = videoOrImg.videoWidth || videoOrImg.width || MAX_SIZE;
+            let h = videoOrImg.videoHeight || videoOrImg.height || MAX_SIZE;
+            if (w > MAX_SIZE || h > MAX_SIZE) {
+                if (w > h) { h = Math.floor(h * (MAX_SIZE / w)); w = MAX_SIZE; }
+                else { w = Math.floor(w * (MAX_SIZE / h)); h = MAX_SIZE; }
+            }
+            canvas.width = w; canvas.height = h;
+            ctx.drawImage(videoOrImg, 0, 0, w, h);
+            URL.revokeObjectURL(url);
+            resolve(canvas.toDataURL('image/jpeg', 0.6));
+        };
+
+        if (file.type.startsWith('image/')) {
+            const img = new Image();
+            img.onload = () => processFrame(img);
+            img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+            img.src = url;
+        } else {
+            const vid = document.createElement('video');
+            vid.muted = true; vid.playsInline = true;
+            vid.onloadeddata = () => {
+                vid.currentTime = Math.min(1, vid.duration / 2);
+            };
+            vid.onseeked = () => processFrame(vid);
+            vid.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+            vid.src = url;
+        }
+    });
+}
+
 export async function uploadFile(file) {
     const chat = state.chats.get(state.currentActiveChat);
     const key = chatKey(chat);
@@ -59,7 +98,9 @@ export async function uploadFile(file) {
         return false;
     }
 
+    const thumbnail = await generateThumbnail(file);
     const chunkSize = CHUNK_SIZE;
+    const localId = 'up_' + Date.now();
     const totalChunks = Math.max(1, Math.ceil(file.size / chunkSize));
     const baseIV = crypto.getRandomValues(new Uint8Array(8));
     const baseIVB64 = b64(baseIV);
@@ -76,7 +117,6 @@ export async function uploadFile(file) {
     }
     const uploadId = init.uploadId;
 
-    const localId = 'upl_' + Date.now();
     const container = document.getElementById('messages');
     const row = document.createElement('div');
     row.className = 'message-row sent';
@@ -111,7 +151,7 @@ export async function uploadFile(file) {
 
         row.remove();
         if (window.sendMessageData) {
-            await window.sendMessageData({ type: 'file', file: { fileId: fin.fileId, name: file.name, size: file.size, mime: file.type || 'application/octet-stream', chunkSize, totalChunks, baseIV: baseIVB64 } });
+            await window.sendMessageData({ type: 'file', file: { fileId: fin.fileId, name: file.name, size: file.size, mime: file.type || 'application/octet-stream', chunkSize, totalChunks, baseIV: baseIVB64, thumbnail } });
         }
         return fin.fileId;
     } catch (e) {
@@ -146,20 +186,65 @@ export async function downloadFile(msg, chat) {
         }
         const blob = new Blob(parts, { type: meta.mime || file.mime || 'application/octet-stream' });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = file.name || 'download';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        const mimeType = meta.mime || file.mime || '';
+        
+        if (mimeType.startsWith('image/') || mimeType.startsWith('video/')) {
+            openMediaViewer(url, mimeType, file.name);
+        } else {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = file.name || 'download';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
+        }
     } catch (e) {
         console.error('download error:', e);
-        alert('Download failed. The file may be corrupted.');
+        alert('Download failed.');
     }
 }
 
+function openMediaViewer(url, mimeType, filename) {
+    let modal = document.getElementById('media-viewer-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'media-viewer-modal';
+        modal.className = 'modal-overlay media-viewer';
+        modal.innerHTML = `
+            <div class="media-viewer-content" style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(0,0,0,0.9); position:relative;">
+                <button class="icon-btn close-btn" style="position:absolute; top:20px; right:20px; color:white; z-index:100; background:rgba(255,255,255,0.2); padding:8px; border-radius:50%;" onclick="const p = this.closest('.modal-overlay'); p.classList.remove('show'); const v = p.querySelector('video'); if(v) v.pause();">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+                <div id="media-viewer-container" style="max-width:90%; max-height:80vh; display:flex; justify-content:center; align-items:center;"></div>
+                <a id="media-download-btn" class="primary-btn" style="position:absolute; bottom:30px; z-index:100; text-decoration:none;" download>Download Original</a>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    const container = document.getElementById('media-viewer-container');
+    const dlBtn = document.getElementById('media-download-btn');
+    dlBtn.href = url;
+    dlBtn.download = filename || 'media';
+    
+    if (mimeType.startsWith('image/')) {
+        container.innerHTML = `<img src="${url}" class="media-full" style="max-width:100%; max-height:80vh; object-fit:contain;">`;
+    } else {
+        container.innerHTML = `<video src="${url}" class="media-full" style="max-width:100%; max-height:80vh;" controls autoplay playsinline></video>`;
+    }
+    
+    modal.classList.add('show');
+}
+
 export function fileBubbleHTML(file) {
+    if (file.thumbnail) {
+        const isVideo = file.mime && file.mime.startsWith('video/');
+        const playIcon = isVideo ? `<div class="play-icon-overlay" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.5); border-radius:50%; padding:12px; display:flex;"><svg width="24" height="24" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg></div>` : '';
+        return `<div class="file-preview-bubble file-download" data-file-id="${escapeHtml(String(file.fileId))}" title="Click to view" style="position:relative; cursor:pointer; border-radius:8px; overflow:hidden; display:inline-block; max-width:250px;">
+            <img src="${file.thumbnail}" class="file-thumbnail" style="width:100%; display:block;">
+            ${playIcon}
+        </div>`;
+    }
     return `<div class="file-bubble">
         <div class="file-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></div>
         <div class="file-info">
