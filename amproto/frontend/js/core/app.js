@@ -266,7 +266,7 @@ state.ws.onmessage = async (event) => {
             if (state.currentActiveChat === sender && !document.hidden) {
                 const readPacket = buildPacket(CMD_READ, sender, state.myId, "");
                 state.ws.send(obfuscate(readPacket));
-                renderMessages(sender);
+                appendMessage(sender, receivedMsg);
             } else {
                 chat.unreadCount++;
                 
@@ -277,7 +277,7 @@ state.ws.onmessage = async (event) => {
                     new Notification(`New message from ${senderName}`, { body: notifText });
                 }
                 
-                if (state.currentActiveChat === sender) renderMessages(sender);
+                if (state.currentActiveChat === sender) appendMessage(sender, receivedMsg);
             }
             renderChatList();
         }
@@ -312,7 +312,9 @@ state.ws.onmessage = async (event) => {
                 if (m.type === 'sent') m.isRead = true;
             });
             await persistKeys();
-            if (state.currentActiveChat === sender) renderMessages(sender);
+            if (state.currentActiveChat === sender) {
+                document.querySelectorAll('#messages .receipt-badge').forEach(badge => badge.classList.add('seen'));
+            }
             renderChatList();
         }
         else if (packet.command === CMD_GROUP_CREATE_OK || packet.command === CMD_GROUP_INFO_OK) {
