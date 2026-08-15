@@ -52,6 +52,18 @@ class AMProto {
     static CMD_REQ_LIST = 0x29;
     static CMD_REQ_LIST_OK = 0x2A;
     
+    // Contact list commands
+    static CMD_CONTACT_LIST = 0x2B;
+    static CMD_CONTACT_LIST_OK = 0x2C;
+    static CMD_CONTACT_REMOVE = 0x2D;
+    static CMD_CONTACT_REMOVE_OK = 0x2E;
+    static CMD_CONTACT_BLOCK = 0x2F;
+    static CMD_CONTACT_BLOCK_OK = 0x35;
+    static CMD_CONTACT_UNBLOCK = 0x36;
+    static CMD_CONTACT_UNBLOCK_OK = 0x37;
+    static CMD_CONTACT_SUGGEST = 0x38;
+    static CMD_CONTACT_SUGGEST_OK = 0x39;
+    
     // WebRTC Signaling
     static CMD_RTC_CALL = 0x30;
     static CMD_RTC_ANSWER = 0x31;

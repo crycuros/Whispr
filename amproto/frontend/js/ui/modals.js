@@ -226,18 +226,40 @@ export function setupModals() {
 
     document.getElementById('btn-new-space').onclick = () => {
         const listEl = document.getElementById('space-member-list');
+        const searchInput = document.getElementById('space-member-search');
         listEl.innerHTML = '';
-        state.chats.forEach(chat => {
-            if (chat.isGroup || chat.peerId === state.myId) return;
-            const row = document.createElement('label');
-            row.className = 'group-member';
-            row.innerHTML = `
-                <input type="checkbox" value="${chat.peerId}">
-                <span class="gm-avatar" style="background:${avatarColor(chat.username)}">${initials(chat.username)}</span>
-                <span class="gm-name">${escapeHtml(chat.username)}</span>
-            `;
-            listEl.appendChild(row);
-        });
+        if (searchInput) searchInput.value = '';
+
+        const memberSource = state.contacts && state.contacts.length > 0
+            ? state.contacts.map(c => ({ id: c.userId, username: c.username }))
+            : Array.from(state.chats.values())
+                .filter(chat => !chat.isGroup && chat.peerId !== state.myId)
+                .map(chat => ({ id: chat.peerId, username: chat.username }));
+
+        const renderMembers = (filter = '') => {
+            listEl.innerHTML = '';
+            const q = filter.toLowerCase();
+            memberSource.forEach(m => {
+                if (q && !(m.username || '').toLowerCase().includes(q)) return;
+                const row = document.createElement('label');
+                row.className = 'group-member';
+                row.innerHTML = `
+                    <input type="checkbox" value="${m.id}">
+                    <span class="gm-avatar" style="background:${avatarColor(m.username)}">${initials(m.username)}</span>
+                    <span class="gm-name">${escapeHtml(m.username)}</span>
+                `;
+                listEl.appendChild(row);
+            });
+            if (listEl.children.length === 0) {
+                listEl.innerHTML = `<div style="text-align:center; color:var(--text-secondary); padding:24px; font-size:13px;">No contacts found</div>`;
+            }
+        };
+
+        if (searchInput) {
+            searchInput.oninput = () => renderMembers(searchInput.value.trim());
+        }
+        renderMembers();
+
         document.getElementById('panel-space-step1').classList.add('active');
     };
 

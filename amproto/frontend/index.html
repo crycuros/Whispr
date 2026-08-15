@@ -46,9 +46,10 @@
                 </button>
                 <button class="nav-btn" id="btn-premium" title="Mensayo Plus">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M2 18h20"></path>
-                        <path d="M3 18l3-9 6 5 6-5 3 9"></path>
-                        <path d="M12 14v4"></path>
+                        <path d="M3 9 C 5 11, 5 13, 3 15" />
+                        <path d="M8 5 C 12 9, 12 15, 8 19" />
+                        <path d="M13 1 C 19 7, 19 17, 13 23" />
+                        <path d="M17 6 h6 M20 3 v6" />
                     </svg>
                 </button>
             </div>
@@ -126,6 +127,30 @@
                         <div style="text-align: center; color: var(--text-secondary); margin-top: 40px; font-size: 14px;">
                             Start typing to search
                         </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- CONTACTS PANEL -->
+            <div class="side-panel" id="panel-contacts">
+                <div class="side-panel-header">
+                    <button class="back-btn" id="btn-back-contacts">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h3>Contacts</h3>
+                </div>
+                <div class="side-panel-content no-padding">
+                    <div class="panel-search">
+                        <input type="text" id="contacts-search" placeholder="Search contacts..." autocomplete="off">
+                    </div>
+                    <div id="contacts-list"></div>
+                    <div class="friend-requests-section" id="contacts-suggestions-section" style="display: none;">
+                        <h4 class="section-title">Suggested for you</h4>
+                        <div id="contacts-suggestions-list"></div>
+                    </div>
+                    <div class="friend-requests-section" id="contacts-blocked-section" style="display: none;">
+                        <h4 class="section-title">Blocked</h4>
+                        <div id="contacts-blocked-list"></div>
                     </div>
                 </div>
             </div>
@@ -360,7 +385,7 @@
                 </div>
                 <div class="side-panel-content no-padding">
                     <div class="panel-search">
-                        <input type="text" placeholder="Search contacts..." autocomplete="off">
+                        <input type="text" id="space-member-search" placeholder="Search contacts..." autocomplete="off">
                     </div>
                     <div class="group-members" id="space-member-list"></div>
                 </div>
@@ -592,7 +617,7 @@
             <div class="premium-modal-inner">
                 <div class="premium-header">
                     <div class="premium-logo">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18h20"></path><path d="M3 18l3-9 6 5 6-5 3 9"></path><path d="M12 14v4"></path></svg>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9 C 5 11, 5 13, 3 15" /><path d="M8 5 C 12 9, 12 15, 8 19" /><path d="M13 1 C 19 7, 19 17, 13 23" /><path d="M17 6 h6 M20 3 v6" /></svg>
                     </div>
                     <h3>Mensayo <span class="plus-tag">Plus</span></h3>
                     <button type="button" class="premium-close-btn" id="btn-premium-close" title="Close" aria-label="Close">

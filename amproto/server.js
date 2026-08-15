@@ -131,6 +131,21 @@ wss.on('connection', (ws) => {
                 case AMProto.CMD_REQ_LIST:
                     friendsController.handleReqList(ws, packet, db);
                     break;
+                case AMProto.CMD_CONTACT_LIST:
+                    friendsController.handleContactList(ws, packet, clients, db);
+                    break;
+                case AMProto.CMD_CONTACT_REMOVE:
+                    friendsController.handleContactRemove(ws, packet, db);
+                    break;
+                case AMProto.CMD_CONTACT_BLOCK:
+                    friendsController.handleContactBlock(ws, packet, clients, db);
+                    break;
+                case AMProto.CMD_CONTACT_UNBLOCK:
+                    friendsController.handleContactUnblock(ws, packet, db);
+                    break;
+                case AMProto.CMD_CONTACT_SUGGEST:
+                    friendsController.handleContactSuggest(ws, packet, db);
+                    break;
                 case AMProto.CMD_REQ_ACCEPT:
                     friendsController.handleReqAccept(ws, packet, clients, db);
                     break;

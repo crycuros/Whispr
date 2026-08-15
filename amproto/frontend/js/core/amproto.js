@@ -42,6 +42,18 @@ export const CMD_REQ_DECLINED = 0x28;
 export const CMD_REQ_LIST = 0x29;
 export const CMD_REQ_LIST_OK = 0x2A;
 
+// Contact list commands
+export const CMD_CONTACT_LIST = 0x2B;
+export const CMD_CONTACT_LIST_OK = 0x2C;
+export const CMD_CONTACT_REMOVE = 0x2D;
+export const CMD_CONTACT_REMOVE_OK = 0x2E;
+export const CMD_CONTACT_BLOCK = 0x2F;
+export const CMD_CONTACT_BLOCK_OK = 0x35;
+export const CMD_CONTACT_UNBLOCK = 0x36;
+export const CMD_CONTACT_UNBLOCK_OK = 0x37;
+export const CMD_CONTACT_SUGGEST = 0x38;
+export const CMD_CONTACT_SUGGEST_OK = 0x39;
+
 // WebRTC Signaling
 export const CMD_RTC_CALL = 0x30;
 export const CMD_RTC_ANSWER = 0x31;

@@ -6,6 +6,9 @@ export const state = {
     myPreferences: {},
     chats: new Map(), // peerId -> Chat Object
     pendingRequests: [], // incoming friend requests
+    contacts: [], // friend roster: [{ userId, username, avatarUrl, bio, online, lastSeen }]
+    contactSuggestions: [], // people you may know
+    blockedContacts: [], // [{ userId, username, avatarUrl, bio }]
     resolvedProfile: null, // last resolved search profile
     currentActiveChat: null,
     groupSeq: 1,

@@ -174,10 +174,13 @@ exports.canMessage = (db, a, b, cb) => {
     db.get(`SELECT
                 (SELECT COUNT(*) FROM friend_requests
                  WHERE status = 'accepted' AND ((user_id = ? AND target_id = ?) OR (user_id = ? AND target_id = ?))) AS friends,
+                (SELECT COUNT(*) FROM friend_requests
+                 WHERE status = 'blocked' AND ((user_id = ? AND target_id = ?) OR (user_id = ? AND target_id = ?))) AS blocked,
                 (SELECT COUNT(*) FROM messages
                  WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)) AS history`,
-        [a, b, b, a, a, b, b, a], (err, row) => {
+        [a, b, b, a, a, b, b, a, a, b, b, a], (err, row) => {
             if (err) return cb(false);
+            if (row && row.blocked > 0) return cb(false);
             cb((row && (row.friends > 0 || row.history > 0)) || false);
         });
 };
@@ -226,5 +229,147 @@ exports.sendMyFriendPresence = (ws, myId, clients, db) => {
         friendIds.forEach(fid => {
             exports.sendPresenceTo(ws, myId, fid, clients, db);
         });
+    });
+};
+
+function lookupUsers(db, ids, cb) {
+    if (!ids || ids.length === 0) return cb(null, []);
+    const placeholders = ids.map(() => '?').join(',');
+    db.all(`SELECT id, username, avatar_url, bio, last_seen FROM users WHERE id IN (${placeholders})`, ids, (err, rows) => {
+        if (err) return cb(err, null);
+        cb(null, rows || []);
+    });
+}
+
+exports.handleContactList = (ws, packet, clients, db) => {
+    const myId = packet.senderId;
+    exports.getFriends(db, myId, (err, friendIds) => {
+        if (err) return;
+        lookupUsers(db, friendIds, (err2, users) => {
+            const contacts = (users || []).map(u => ({
+                userId: u.id,
+                username: u.username,
+                avatarUrl: u.avatar_url || null,
+                bio: u.bio || '',
+                online: clients.has(u.id),
+                lastSeen: clients.has(u.id) ? null : (u.last_seen || null)
+            }));
+            db.all(`SELECT target_id FROM friend_requests WHERE user_id = ? AND status = 'blocked'`, [myId], (err3, blockedRows) => {
+                const blockedIds = (blockedRows || []).map(r => r.target_id);
+                lookupUsers(db, blockedIds, (err4, bUsers) => {
+                    const blocked = (bUsers || []).map(u => ({
+                        userId: u.id,
+                        username: u.username,
+                        avatarUrl: u.avatar_url || null,
+                        bio: u.bio || ''
+                    }));
+                    sendPacket(ws, AMProto.CMD_CONTACT_LIST_OK, myId, 0, { contacts, blocked });
+                });
+            });
+        });
+    });
+};
+
+exports.handleContactRemove = (ws, packet, db) => {
+    const myId = packet.senderId;
+    let targetId;
+    try {
+        targetId = JSON.parse(packet.payloadString).userId;
+    } catch (e) {
+        sendPacket(ws, AMProto.CMD_ERROR, packet.senderId, 0, { message: 'Invalid request' });
+        return;
+    }
+    db.run(`DELETE FROM friend_requests
+            WHERE status = 'accepted' AND ((user_id = ? AND target_id = ?) OR (user_id = ? AND target_id = ?))`,
+        [myId, targetId, targetId, myId], (err) => {
+            if (err) {
+                sendPacket(ws, AMProto.CMD_ERROR, packet.senderId, 0, { message: 'Failed to remove contact' });
+                return;
+            }
+            sendPacket(ws, AMProto.CMD_CONTACT_REMOVE_OK, myId, 0, { userId: targetId });
+        });
+};
+
+exports.handleContactBlock = (ws, packet, clients, db) => {
+    const myId = packet.senderId;
+    let targetId;
+    try {
+        targetId = JSON.parse(packet.payloadString).userId;
+    } catch (e) {
+        sendPacket(ws, AMProto.CMD_ERROR, packet.senderId, 0, { message: 'Invalid request' });
+        return;
+    }
+    if (targetId === myId) {
+        sendPacket(ws, AMProto.CMD_ERROR, packet.senderId, 0, { message: 'You cannot block yourself' });
+        return;
+    }
+    db.run(`DELETE FROM friend_requests WHERE status = 'accepted' AND ((user_id = ? AND target_id = ?) OR (user_id = ? AND target_id = ?))`,
+        [myId, targetId, targetId, myId], () => {
+            db.run(`INSERT OR REPLACE INTO friend_requests (user_id, target_id, status, note) VALUES (?, ?, 'blocked', '')`,
+                [myId, targetId], (err) => {
+                    if (err) {
+                        sendPacket(ws, AMProto.CMD_ERROR, packet.senderId, 0, { message: 'Failed to block contact' });
+                        return;
+                    }
+                    sendPacket(ws, AMProto.CMD_CONTACT_BLOCK_OK, myId, 0, { userId: targetId });
+                    // Drop any chat presence subscription the other side has on us
+                    if (clients.has(targetId)) {
+                        const tws = clients.get(targetId);
+                        if (tws.readyState === WebSocket.OPEN) {
+                            sendPacket(tws, AMProto.CMD_PRESENCE, targetId, myId, { userId: myId, online: false, lastSeen: null });
+                        }
+                    }
+                });
+        });
+};
+
+exports.handleContactUnblock = (ws, packet, db) => {
+    const myId = packet.senderId;
+    let targetId;
+    try {
+        targetId = JSON.parse(packet.payloadString).userId;
+    } catch (e) {
+        sendPacket(ws, AMProto.CMD_ERROR, packet.senderId, 0, { message: 'Invalid request' });
+        return;
+    }
+    db.run(`DELETE FROM friend_requests WHERE user_id = ? AND target_id = ? AND status = 'blocked'`,
+        [myId, targetId], (err) => {
+            if (err) {
+                sendPacket(ws, AMProto.CMD_ERROR, packet.senderId, 0, { message: 'Failed to unblock contact' });
+                return;
+            }
+            sendPacket(ws, AMProto.CMD_CONTACT_UNBLOCK_OK, myId, 0, { userId: targetId });
+        });
+};
+
+exports.handleContactSuggest = (ws, packet, db) => {
+    const myId = packet.senderId;
+    // Candidates: users who are not me, not already friends/pending, and not blocked in either direction.
+    // Prefer people sharing a Space with me, then newest accounts.
+    db.all(`SELECT u.id, u.username, u.avatar_url, u.bio
+            FROM users u
+            WHERE u.id != ?
+              AND NOT EXISTS (SELECT 1 FROM friend_requests fr
+                              WHERE fr.status IN ('accepted','pending')
+                                AND ((fr.user_id = ? AND fr.target_id = u.id) OR (fr.user_id = u.id AND fr.target_id = ?)))
+              AND NOT EXISTS (SELECT 1 FROM friend_requests fr2
+                              WHERE fr2.status = 'blocked'
+                                AND ((fr2.user_id = ? AND fr2.target_id = u.id) OR (fr2.user_id = u.id AND fr2.target_id = ?)))
+            ORDER BY (SELECT COUNT(*) FROM group_members gm
+                      WHERE gm.user_id = u.id
+                        AND gm.group_id IN (SELECT group_id FROM group_members WHERE user_id = ?)) DESC,
+                     u.id DESC
+            LIMIT 12`, [myId, myId, myId, myId, myId, myId], (err, rows) => {
+        if (err) {
+            sendPacket(ws, AMProto.CMD_ERROR, packet.senderId, 0, { message: 'Failed to load suggestions' });
+            return;
+        }
+        const suggestions = (rows || []).map(u => ({
+            userId: u.id,
+            username: u.username,
+            avatarUrl: u.avatar_url || null,
+            bio: u.bio || ''
+        }));
+        sendPacket(ws, AMProto.CMD_CONTACT_SUGGEST_OK, myId, 0, { suggestions });
     });
 };
