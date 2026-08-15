@@ -2536,17 +2536,79 @@ video {
     padding: 1px 4px;
     letter-spacing: 0.5px;
 }
+.premium-modal {
+    width: 90%;
+    max-width: 440px;
+    max-height: 90vh;
+    overflow-y: auto;
+    border-radius: 24px;
+    border: 1px solid rgba(250, 204, 21, 0.18);
+    background:
+        radial-gradient(120% 60% at 100% -10%, rgba(250, 204, 21, 0.16), transparent 55%),
+        radial-gradient(120% 60% at -10% 110%, rgba(250, 204, 21, 0.10), transparent 55%),
+        var(--bg-primary);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.14);
+    animation: modalPop 0.22s ease-out;
+}
+@keyframes modalPop {
+    from { transform: scale(0.95) translateY(10px); opacity: 0; }
+    to { transform: scale(1) translateY(0); opacity: 1; }
+}
+.premium-modal-inner {
+    padding: 22px 24px 26px;
+}
 .premium-header {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+.premium-logo {
+    width: 40px;
+    height: 40px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #facc15, #f59e0b);
+    color: #1a1a1a;
+    box-shadow: 0 4px 14px rgba(250, 204, 21, 0.35);
+}
+.premium-header h3 {
+    flex: 1;
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.premium-header h3 .plus-tag {
     color: #facc15;
-    margin-bottom: 12px;
+}
+.premium-close-btn {
+    width: 32px;
+    height: 32px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.2s ease;
+}
+.premium-close-btn:hover {
+    background: rgba(239, 68, 68, 0.16);
+    color: #ef4444;
+    transform: rotate(90deg);
 }
 .premium-status {
     font-size: 13px;
     color: var(--text-secondary);
     margin: 0 0 16px;
+    line-height: 1.5;
 }
 .premium-status.active {
     color: #facc15;
@@ -2554,7 +2616,7 @@ video {
 }
 .premium-plans {
     display: flex;
-    gap: 8px;
+    gap: 10px;
     margin-bottom: 16px;
 }
 .premium-plan {
@@ -2563,12 +2625,17 @@ video {
     flex-direction: column;
     align-items: center;
     gap: 2px;
-    padding: 12px 8px;
+    padding: 14px 10px;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 14px;
     background: transparent;
     color: var(--text-primary);
     cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+.premium-plan:hover {
+    border-color: rgba(250, 204, 21, 0.5);
+    transform: translateY(-1px);
 }
 .premium-plan.selected {
     border-color: #facc15;
@@ -2581,12 +2648,13 @@ video {
 .premium-checkout {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     margin-bottom: 16px;
 }
 .premium-checkout .panel-input {
     width: 100%;
     box-sizing: border-box;
+    border-radius: 12px;
 }
 .premium-msg {
     font-size: 12px;
@@ -2686,21 +2754,34 @@ video {
     align-items: center;
     text-align: center;
     gap: 8px;
-    padding: 24px 12px 28px;
-    color: #facc15;
-    border: 1px dashed var(--border);
-    border-radius: 10px;
-    margin-bottom: 8px;
+    padding: 26px 16px 28px;
+    border-radius: 18px;
+    border: 1px solid rgba(250, 204, 21, 0.18);
+    background: linear-gradient(160deg, rgba(250, 204, 21, 0.10), rgba(250, 204, 21, 0.02));
+    margin-bottom: 4px;
+}
+.coming-soon-icon {
+    width: 58px;
+    height: 58px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: #1a1a1a;
+    background: linear-gradient(135deg, #facc15, #f59e0b);
+    box-shadow: 0 8px 20px rgba(250, 204, 21, 0.35);
+    margin-bottom: 4px;
 }
 .coming-soon-title {
     margin: 0;
-    font-size: 18px;
-    font-weight: 700;
+    font-size: 19px;
+    font-weight: 800;
     color: var(--text-primary);
+    letter-spacing: 0.3px;
 }
 .coming-soon-desc {
     font-size: 13px;
     color: var(--text-secondary);
     max-width: 300px;
-    line-height: 1.5;
+    line-height: 1.55;
 }

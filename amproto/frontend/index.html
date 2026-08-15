@@ -588,20 +588,25 @@
 
     <!-- PREMIUM MODAL -->
     <div class="modal-overlay" id="premium-modal" style="display: none; z-index: 20000;">
-        <div class="modal premium-modal" style="background: var(--bg-primary); width: 90%; max-width: 440px; max-height: 90vh; overflow-y: auto;">
-            <div class="premium-header">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18h20"></path><path d="M3 18l3-9 6 5 6-5 3 9"></path><path d="M12 14v4"></path></svg>
-                <h3 style="margin: 0;">Mensayo Plus</h3>
-                <button type="button" class="draw-close-btn" id="btn-premium-close" title="Close">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
-            </div>
-            <p class="premium-status" id="premium-status"></p>
-            <div class="premium-coming-soon" id="premium-coming-soon">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"></path></svg>
-                <p class="coming-soon-title">Coming Soon</p>
-                <span class="coming-soon-desc">We're working on Mensayo Plus &mdash; bigger file sharing limits and exclusive perks are on the way. Stay tuned!</span>
-            </div>
+        <div class="premium-modal">
+            <div class="premium-modal-inner">
+                <div class="premium-header">
+                    <div class="premium-logo">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18h20"></path><path d="M3 18l3-9 6 5 6-5 3 9"></path><path d="M12 14v4"></path></svg>
+                    </div>
+                    <h3>Mensayo <span class="plus-tag">Plus</span></h3>
+                    <button type="button" class="premium-close-btn" id="btn-premium-close" title="Close" aria-label="Close">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"></path><path d="M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <p class="premium-status" id="premium-status"></p>
+                <div class="premium-coming-soon" id="premium-coming-soon">
+                    <div class="coming-soon-icon">
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"></path></svg>
+                    </div>
+                    <p class="coming-soon-title">Coming Soon</p>
+                    <span class="coming-soon-desc">We're working on Mensayo Plus &mdash; bigger file sharing limits and exclusive perks are on the way. Stay tuned!</span>
+                </div>
             <div id="premium-purchase-area" style="display: none;">
                 <div class="premium-plans">
                     <button type="button" class="premium-plan selected" data-plan="monthly">
@@ -627,6 +632,7 @@
                 <div class="modal-actions" style="display: flex; justify-content: space-between; gap: 16px;">
                     <button class="btn-secondary" id="btn-premium-cancel" style="flex: 1;">Cancel</button>
                     <button class="btn-primary" id="btn-premium-pay" style="flex: 1;">Subscribe</button>
+                </div>
                 </div>
             </div>
         </div>
