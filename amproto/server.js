@@ -13,6 +13,7 @@ const friendsController = require('./backend/controllers/friends');
 const vaultController = require('./backend/controllers/vault');
 const keysController = require('./backend/controllers/keys');
 const voiceController = require('./backend/controllers/voice');
+const savedController = require('./backend/controllers/saved');
 const linkPreview = require('./backend/utils/linkPreview');
 
 const PORT = 3000;
@@ -110,6 +111,15 @@ wss.on('connection', (ws) => {
                     break;
                 case AMProto.CMD_VAULT_DOWNLOAD:
                     vaultController.handleVaultDownload(ws, packet, clients, db);
+                    break;
+                case AMProto.CMD_SAVED_SAVE:
+                    savedController.handleSavedSave(ws, packet, clients, db);
+                    break;
+                case AMProto.CMD_SAVED_LIST:
+                    savedController.handleSavedList(ws, packet, clients, db);
+                    break;
+                case AMProto.CMD_SAVED_DELETE:
+                    savedController.handleSavedDelete(ws, packet, clients, db);
                     break;
                 case AMProto.CMD_VOICE_UPLOAD:
                     voiceController.handleVoiceUpload(ws, packet, db);

@@ -57,6 +57,14 @@ export const CMD_VAULT_LIST_OK = 0x43;
 export const CMD_VAULT_DOWNLOAD = 0x44;
 export const CMD_VAULT_DOWNLOAD_OK = 0x45;
 
+// Saved Messages Commands
+export const CMD_SAVED_SAVE = 0x4A;
+export const CMD_SAVED_SAVE_OK = 0x4B;
+export const CMD_SAVED_LIST = 0x4C;
+export const CMD_SAVED_LIST_OK = 0x4D;
+export const CMD_SAVED_DELETE = 0x4E;
+export const CMD_SAVED_DELETE_OK = 0x4F;
+
 // Voice Message Commands
 export const CMD_VOICE_UPLOAD = 0x46;
 export const CMD_VOICE_UPLOAD_OK = 0x47;

@@ -279,16 +279,30 @@
                     </div>
 
                     <div id="vault-unlocked-state" style="display: none;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                            <h4 style="margin: 0; color: var(--text-primary);">Files</h4>
-                            <label class="btn-primary" style="cursor: pointer; padding: 6px 12px; font-size: 12px; border-radius: 4px;">
-                                Upload
-                                <input type="file" id="vault-upload-input" style="display: none;">
-                            </label>
+                        <div class="vault-tabs">
+                            <button class="vault-tab active" id="vault-tab-files">Files</button>
+                            <button class="vault-tab" id="vault-tab-saved">Saved Messages</button>
                         </div>
-                        
-                        <div id="vault-file-list" style="display: flex; flex-direction: column; gap: 8px;">
-                            <!-- Files go here -->
+
+                        <div id="vault-files-section">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                <h4 style="margin: 0; color: var(--text-primary);">Files</h4>
+                                <label class="btn-primary" style="cursor: pointer; padding: 6px 12px; font-size: 12px; border-radius: 4px;">
+                                    Upload
+                                    <input type="file" id="vault-upload-input" style="display: none;">
+                                </label>
+                            </div>
+                            
+                            <div id="vault-file-list" style="display: flex; flex-direction: column; gap: 8px;">
+                                <!-- Files go here -->
+                            </div>
+                        </div>
+
+                        <div id="vault-saved-section" style="display: none;">
+                            <input type="text" id="saved-search" class="panel-input" placeholder="Search saved messages" style="margin-bottom: 12px;">
+                            <div id="saved-list" style="display: flex; flex-direction: column; gap: 8px;">
+                                <!-- Saved messages go here -->
+                            </div>
                         </div>
                     </div>
                 </div>

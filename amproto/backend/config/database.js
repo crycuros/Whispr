@@ -95,6 +95,14 @@ db.serialize(() => {
         clip_data BLOB,
         created_at INTEGER DEFAULT (strftime('%s','now'))
     )`);
+    db.run(`CREATE TABLE IF NOT EXISTS saved_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        msg_type TEXT NOT NULL,
+        content_enc TEXT,
+        meta_enc TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
 
 });
 

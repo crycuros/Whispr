@@ -67,6 +67,14 @@ class AMProto {
     static CMD_VAULT_DOWNLOAD = 0x44;
     static CMD_VAULT_DOWNLOAD_OK = 0x45;
     
+    // Saved Messages Commands
+    static CMD_SAVED_SAVE = 0x4A;
+    static CMD_SAVED_SAVE_OK = 0x4B;
+    static CMD_SAVED_LIST = 0x4C;
+    static CMD_SAVED_LIST_OK = 0x4D;
+    static CMD_SAVED_DELETE = 0x4E;
+    static CMD_SAVED_DELETE_OK = 0x4F;
+    
     // Voice Message Commands
     static CMD_VOICE_UPLOAD = 0x46;
     static CMD_VOICE_UPLOAD_OK = 0x47;

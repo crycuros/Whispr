@@ -443,9 +443,94 @@ function buildMessageElement(msg, chat, peerId) {
                 bmBtn.innerHTML = nowBookmarked ? bookmarkSVGFilled : bookmarkSVGOutline;
             };
             wrapper.appendChild(bmBtn);
+
+            const saveBtn = document.createElement('button');
+            saveBtn.className = 'saved-btn';
+            saveBtn.title = 'Save to Vault';
+            saveBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>`;
+            saveBtn.onclick = (e) => {
+                e.stopPropagation();
+                saveMessageToVault(msg, chat, peerId, saveBtn);
+            };
+            wrapper.appendChild(saveBtn);
         }
 
         return wrapper;
+}
+
+function payloadTextOf(msg) {
+    if (!msg.text) return '';
+    if (msg.text.startsWith('{')) {
+        try { const o = JSON.parse(msg.text); if (o.text !== undefined) return o.text; } catch(e) {}
+    }
+    return msg.text;
+}
+
+function isVoiceMsg(msg) {
+    if (msg.audioId) return true;
+    if (msg.text && msg.text.startsWith('{')) {
+        try { const o = JSON.parse(msg.text); if (o.type === 'voice') return true; } catch(e) {}
+    }
+    return false;
+}
+
+function payloadLinkOf(msg) {
+    if (!msg.text || !msg.text.startsWith('{')) return null;
+    try { const o = JSON.parse(msg.text); if (o.preview && o.preview.url) return o.preview.url; } catch(e) {}
+    return null;
+}
+
+async function resolveVoiceBlob(msg, chat) {
+    const url = await loadVoiceSrc(msg, chat);
+    if (!url) return null;
+    try {
+        const resp = await fetch(url);
+        return await resp.blob();
+    } catch (e) {
+        return null;
+    }
+}
+
+async function saveMessageToVault(msg, chat, peerId, saveBtn) {
+    const Vault = await import('../features/vault.js');
+    const source = chat.isGroup ? chat.username : (msg.type === 'received' ? chat.username : state.myUsername);
+    const meta = { type: 'text', source, time: formatTime(msg.time) };
+
+    let contentBytes = null;
+    try {
+        if (isVoiceMsg(msg)) {
+            const blob = await resolveVoiceBlob(msg, chat);
+            if (!blob) { alert('Could not load voice message to save.'); return; }
+            meta.type = 'voice';
+            meta.mime = blob.type || 'audio/webm';
+            meta.duration = msg.duration || 0;
+            contentBytes = new Uint8Array(await blob.arrayBuffer());
+        } else if (msg.imgData) {
+            meta.type = 'file';
+            meta.name = 'image_' + (msg.id || Date.now()) + '.png';
+            meta.mime = 'image/png';
+            meta.size = msg.imgData.length;
+            const b64 = msg.imgData.split(',')[1] || msg.imgData;
+            const bin = atob(b64);
+            const u8 = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+            contentBytes = u8;
+        } else {
+            const text = payloadTextOf(msg);
+            if (!text) return;
+            const link = payloadLinkOf(msg);
+            meta.type = link ? 'link' : 'text';
+            contentBytes = new TextEncoder().encode(JSON.stringify(link ? { text, url: link } : { text }));
+        }
+
+        const ok = await Vault.saveToVault(meta.type, contentBytes, meta);
+        if (ok && saveBtn) {
+            saveBtn.classList.add('saved-ok');
+            setTimeout(() => saveBtn.classList.remove('saved-ok'), 1200);
+        }
+    } catch (err) {
+        console.error('save error:', err);
+    }
 }
 
 export function showTypingIndicator(username) {
