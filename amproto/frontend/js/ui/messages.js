@@ -322,6 +322,7 @@ export function renderMessages(peerId) {
     });
 
     container.appendChild(fragment);
+    container._histSuppressUntil = Date.now() + 1200;
     container.scrollTop = container.scrollHeight;
 }
 
