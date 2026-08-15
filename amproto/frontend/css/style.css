@@ -2772,6 +2772,7 @@ video {
 .bubble.media-bubble {
     padding: 0 !important;
     background: transparent !important;
+    max-width: 350px !important;
 }
 .bubble.received.media-bubble .file-preview-bubble,
 .bubble.received.media-bubble img {

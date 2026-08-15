@@ -52,7 +52,7 @@ async function generateThumbnail(file) {
         const url = URL.createObjectURL(file);
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        const MAX_SIZE = 250;
+        const MAX_SIZE = 350;
 
         const processFrame = (videoOrImg) => {
             let w = videoOrImg.videoWidth || videoOrImg.width || MAX_SIZE;
@@ -240,7 +240,7 @@ export function fileBubbleHTML(file) {
     if (file.thumbnail) {
         const isVideo = file.mime && file.mime.startsWith('video/');
         const playIcon = isVideo ? `<div class="play-icon-overlay" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.5); border-radius:50%; padding:12px; display:flex;"><svg width="24" height="24" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg></div>` : '';
-        return `<div class="file-preview-bubble file-download" data-file-id="${escapeHtml(String(file.fileId))}" title="Click to view" style="position:relative; cursor:pointer; border-radius:8px; overflow:hidden; display:inline-block; max-width:250px;">
+        return `<div class="file-preview-bubble file-download" data-file-id="${escapeHtml(String(file.fileId))}" title="Click to view" style="position:relative; cursor:pointer; overflow:hidden; display:block; width:100%;">
             <img src="${file.thumbnail}" class="file-thumbnail" style="width:100%; display:block;">
             ${playIcon}
         </div>`;
