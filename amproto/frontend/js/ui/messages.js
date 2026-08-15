@@ -368,6 +368,16 @@ function startTimerTicker() {
     }, 500);
 }
 
+const MSG_LINK_MAX = 60;
+
+function linkifyMessageText(text) {
+    if (!text) return '';
+    return escapeHtml(text).replace(/(https?:\/\/[^\s<]+)/gi, (match) => {
+        const truncated = match.length > MSG_LINK_MAX;
+        return `<a class="msg-link${truncated ? ' truncated' : ''}" href="${match}" target="_blank" rel="noopener" title="${match}">${match}</a>`;
+    });
+}
+
 function buildMessageElement(msg, chat, peerId) {
         const payloadObj = (msg.text && msg.text.startsWith('{')) ? (() => { try { return JSON.parse(msg.text); } catch(e) { return null; } })() : null;
         const isPoll = payloadObj && payloadObj.type === 'poll';
@@ -377,7 +387,7 @@ function buildMessageElement(msg, chat, peerId) {
         if (isVote) return null;
 
         const displayString = (payloadObj && payloadObj.text !== undefined) ? payloadObj.text : (msg.text || '');
-        let messageContent = escapeHtml(displayString);
+        let messageContent = linkifyMessageText(displayString);
         if (isPoll) {
             messageContent = renderPoll(msg, chat, payloadObj);
         } else if (isVoice) {
@@ -394,11 +404,15 @@ function buildMessageElement(msg, chat, peerId) {
         const preview = (payloadObj && payloadObj.preview) || msg.preview;
         if (state.myPreferences.embeds !== false && preview && preview.title) {
             const pv = preview;
+            const safeUrl = String(pv.url || '').replace(/'/g, '%27');
+            const imgHtml = pv.image ? `<div class="link-preview-imgwrap"><img src="${pv.image}" alt="" loading="lazy"></div>` : '';
             messageContent += `
-                <div class="link-preview" style="margin-top: 8px; border-left: 3px solid #3b82f6; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; display: flex; flex-direction: column; gap: 4px; cursor: pointer;" onclick="window.open('${pv.url}', '_blank')">
-                    ${pv.image ? `<img src="${pv.image}" style="max-width: 100%; border-radius: 4px; margin-bottom: 4px;">` : ''}
-                    <div style="font-weight: 600; font-size: 0.9em; color: #e5e7eb;">${escapeHtml(pv.title)}</div>
-                    ${pv.description ? `<div style="font-size: 0.8em; color: #9ca3af; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${escapeHtml(pv.description)}</div>` : ''}
+                <div class="link-preview" title="${escapeHtml(pv.title)}" onclick="window.open('${safeUrl}','_blank')">
+                    ${imgHtml}
+                    <div class="link-preview-body">
+                        <div class="link-preview-title">${escapeHtml(pv.title)}</div>
+                        ${pv.description ? `<div class="link-preview-desc">${escapeHtml(pv.description)}</div>` : ''}
+                    </div>
                 </div>
             `;
         }
