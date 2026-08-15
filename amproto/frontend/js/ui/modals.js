@@ -44,6 +44,8 @@ export function setupModals() {
     const prefReactions = document.getElementById('pref-reactions');
     const prefAutoplayGif = document.getElementById('pref-autoplay-gif');
     const prefReducedMotion = document.getElementById('pref-reduced-motion');
+    const prefNotifSound = document.getElementById('pref-notif-sound');
+    const prefNotifDesktop = document.getElementById('pref-notif-desktop');
 
     function savePreferences() {
         state.myPreferences = {
@@ -56,7 +58,9 @@ export function setupModals() {
             embeds: prefEmbeds.checked,
             reactions: prefReactions.checked,
             autoplayGif: prefAutoplayGif.checked,
-            reducedMotion: prefReducedMotion.checked
+            reducedMotion: prefReducedMotion.checked,
+            notifSound: prefNotifSound.checked,
+            notifDesktop: prefNotifDesktop.checked
         };
         applyPreferences(state.myPreferences);
         
@@ -130,7 +134,19 @@ export function setupModals() {
     }));
     prefZoom.addEventListener('change', savePreferences);
     if (prefPrivacy) prefPrivacy.addEventListener('change', savePreferences);
-    [prefEmbeds, prefReactions, prefAutoplayGif, prefReducedMotion].forEach(el => el.addEventListener('change', savePreferences));
+    
+    prefNotifDesktop.addEventListener('change', (e) => {
+        if (e.target.checked && window.Notification && Notification.permission !== 'granted') {
+            Notification.requestPermission().then(permission => {
+                if (permission !== 'granted') e.target.checked = false;
+                savePreferences();
+            });
+        } else {
+            savePreferences();
+        }
+    });
+
+    [prefEmbeds, prefReactions, prefAutoplayGif, prefReducedMotion, prefNotifSound].forEach(el => el.addEventListener('change', savePreferences));
 
     const savedColor = localStorage.getItem('whispr_accent_color');
     if (savedColor) applyThemeColor(savedColor);
@@ -381,6 +397,8 @@ export function applyPreferences(prefs) {
     const prefReactions = document.getElementById('pref-reactions');
     const prefAutoplayGif = document.getElementById('pref-autoplay-gif');
     const prefReducedMotion = document.getElementById('pref-reduced-motion');
+    const prefNotifSound = document.getElementById('pref-notif-sound');
+    const prefNotifDesktop = document.getElementById('pref-notif-desktop');
 
     if (prefs.theme) { prefTheme.value = prefs.theme; }
     if (prefs.display) { prefDisplay.value = prefs.display; }
@@ -392,6 +410,8 @@ export function applyPreferences(prefs) {
     if (prefs.reactions !== undefined) prefReactions.checked = prefs.reactions;
     if (prefs.autoplayGif !== undefined) prefAutoplayGif.checked = prefs.autoplayGif;
     if (prefs.reducedMotion !== undefined) prefReducedMotion.checked = prefs.reducedMotion;
+    if (prefs.notifSound !== undefined) prefNotifSound.checked = prefs.notifSound;
+    if (prefs.notifDesktop !== undefined) prefNotifDesktop.checked = prefs.notifDesktop;
 
     document.body.dataset.theme = prefs.theme || 'light';
     document.body.dataset.display = prefs.display || 'cozy';
