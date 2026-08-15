@@ -65,6 +65,7 @@ async function loadVoiceSrc(msg, chat) {
         const blob = new Blob([plain], { type: data.mime || 'audio/webm' });
         const url = URL.createObjectURL(blob);
         window.__audioCache[msg.audioId] = url;
+        renderWaveform(msg.audioId, url);
         return url;
     } catch (e) {
         console.error('voice load error:', e);
@@ -75,15 +76,69 @@ async function loadVoiceSrc(msg, chat) {
 function voicePlayerHTML(msg, chat) {
     const dur = Math.ceil(msg.duration || 0);
     return `
-        <div class="voice-bubble">
+        <div class="voice-bubble" data-audio-id="${escapeHtml(String(msg.audioId))}">
             <button class="play-btn voice-play" data-audio-id="${escapeHtml(String(msg.audioId))}">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
             </button>
             <div class="waveform">
-                ${Array.from({ length: 24 }, (_, i) => `<span style="height:${6 + Math.abs(Math.sin(i * 0.7)) * 14}px"></span>`).join('')}
+                ${Array.from({ length: 24 }, (_, i) => `<span style="height:${6 + Math.abs(Math.sin(i * 0.7)) * 14}px;--i:${i}"></span>`).join('')}
             </div>
             <span class="duration">${dur}s</span>
         </div>`;
+}
+
+let __voiceCtx = null;
+function voiceAudioCtx() {
+    if (!__voiceCtx) __voiceCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return __voiceCtx;
+}
+
+async function computeWaveform(url, bars = 24) {
+    try {
+        const resp = await fetch(url);
+        const buf = await resp.arrayBuffer();
+        const audioCtx = voiceAudioCtx();
+        const audioBuf = await audioCtx.decodeAudioData(buf);
+        const data = audioBuf.getChannelData(0);
+        const heights = [];
+        const step = Math.floor(data.length / bars);
+        const rmsArr = [];
+        for (let i = 0; i < bars; i++) {
+            const start = i * step;
+            const end = (i === bars - 1) ? data.length : start + step;
+            let sum = 0, count = 0;
+            for (let j = start; j < end; j += 8) {
+                sum += Math.abs(data[j]);
+                count++;
+            }
+            rmsArr.push(count ? sum / count : 0);
+        }
+        const maxRms = Math.max(...rmsArr);
+        for (let i = 0; i < bars; i++) {
+            const v = maxRms > 0.001 ? (rmsArr[i] / maxRms) * 24 : (rmsArr[i] * 160);
+            heights.push(Math.round(Math.max(3, Math.min(24, v))));
+        }
+        return heights;
+    } catch (e) {
+        console.error('waveform compute error:', e);
+        return null;
+    }
+}
+
+function renderWaveform(audioId, url) {
+    if (!window.__waveCache) window.__waveCache = {};
+    if (window.__waveCache[audioId]) return;
+    computeWaveform(url).then((heights) => {
+        if (!heights) return;
+        window.__waveCache[audioId] = heights;
+        document.querySelectorAll(`.voice-bubble[data-audio-id="${audioId}"]`).forEach(b => applyWaveform(b, heights));
+    });
+}
+
+function applyWaveform(bubble, heights) {
+    const bars = bubble.querySelectorAll('.waveform span');
+    if (!bars.length) return;
+    bars.forEach((b, i) => { if (heights[i] != null) b.style.height = heights[i] + 'px'; });
 }
 
 export function openChat(peerId) {
@@ -290,6 +345,9 @@ function buildMessageElement(msg, chat, peerId) {
             messageContent = renderPoll(msg, chat, payloadObj);
         } else if (isVoice) {
             messageContent = voicePlayerHTML({ ...msg, ...payloadObj }, chat);
+            if (window.__waveCache && window.__waveCache[msg.audioId]) {
+                messageContent = messageContent.replace(/<span style="height:[^"]+"--i:(\d+)"><\/span>/g, (m, i) => `<span style="height:${window.__waveCache[msg.audioId][Number(i)] || 3}px;--i:${i}"></span>`);
+            }
         } else if (msg.imgData) {
             messageContent = `<img src="${msg.imgData}" style="max-width: 250px; border-radius: 8px; cursor: pointer;" onclick="window.open('${msg.imgData}', '_blank')">`;
         }
@@ -494,12 +552,25 @@ export function setupMessageUI() {
             alert('Could not load voice message.');
             return;
         }
+        const bubble = playBtn.closest('.voice-bubble');
         let audioEl = document.querySelector(`audio[data-audio-id="${audioId}"]`);
+        const clearPlaying = () => {
+            document.querySelectorAll('.voice-bubble.playing').forEach(v => v.classList.remove('playing'));
+        };
+        const updatePlaying = () => {
+            clearPlaying();
+            if (audioEl && !audioEl.paused && !audioEl.ended && bubble) bubble.classList.add('playing');
+        };
         if (!audioEl) {
             audioEl = new Audio(src);
             audioEl.dataset.audioId = audioId;
+            window.__currentAudio = audioEl;
+            audioEl.onplay = updatePlaying;
+            audioEl.onpause = clearPlaying;
+            audioEl.onended = clearPlaying;
             document.querySelectorAll('audio[data-audio-id]').forEach(a => a.pause());
             audioEl.play().catch(() => {});
+            updatePlaying();
         } else {
             if (audioEl.paused) audioEl.play().catch(() => {});
             else audioEl.pause();

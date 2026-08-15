@@ -731,7 +731,18 @@ input { font-family: inherit; }
     max-height: 24px;
     background: currentColor;
     border-radius: 2px;
+    transform-origin: center;
 }
+.voice-bubble.playing .waveform span {
+    animation: wave-bounce 0.9s ease-in-out infinite;
+    animation-delay: calc(var(--i, 0) * -0.08s);
+}
+@keyframes wave-bounce {
+    0%, 100% { transform: scaleY(0.35); }
+    50% { transform: scaleY(1); }
+}
+.voice-bubble.playing .waveform { opacity: 1; }
+.voice-bubble.playing .duration { color: var(--accent); }
 .voice-bubble .duration { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
 
 /* Voice recording indicator */
@@ -835,8 +846,8 @@ input { font-family: inherit; }
     border-top: 1px solid var(--divider);
 }
 .mic-btn {
-    width: clamp(32px, 2.8cqw, 40px);
-    height: clamp(32px, 2.8cqw, 40px);
+    width: clamp(28px, 2.5cqw, 36px);
+    height: clamp(28px, 2.5cqw, 36px);
     border-radius: 50%;
     background: transparent;
     border: none;
@@ -847,6 +858,7 @@ input { font-family: inherit; }
     flex-shrink: 0;
     transition: background 0.15s ease, color 0.15s ease;
 }
+.mic-btn svg { width: clamp(14px, 1.5cqw, 20px); height: clamp(14px, 1.5cqw, 20px); }
 .mic-btn:hover { background: var(--input-bg); color: var(--text-primary); }
 .input-area input {
     flex: 1;
