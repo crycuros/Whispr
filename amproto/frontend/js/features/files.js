@@ -240,8 +240,8 @@ export function fileBubbleHTML(file) {
     if (file.thumbnail) {
         const isVideo = file.mime && file.mime.startsWith('video/');
         const playIcon = isVideo ? `<div class="play-icon-overlay" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.5); border-radius:50%; padding:12px; display:flex;"><svg width="24" height="24" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg></div>` : '';
-        return `<div class="file-preview-bubble file-download" data-file-id="${escapeHtml(String(file.fileId))}" title="Click to view" style="position:relative; cursor:pointer; overflow:hidden; display:inline-block;">
-            <img src="${file.thumbnail}" class="file-thumbnail" style="max-width: 100%; border-radius: var(--bubble-radius);">
+        return `<div class="file-preview-bubble" data-file-id="${escapeHtml(String(file.fileId))}" title="Click to view" style="position:relative; cursor:pointer; overflow:hidden; display:inline-block;">
+            <img src="${file.thumbnail}" class="file-thumbnail" style="max-width: 350px; max-height: 400px; width: auto; height: auto; border-radius: var(--bubble-radius);">
             ${playIcon}
         </div>`;
     }
@@ -267,7 +267,7 @@ export function setupFileHandlers() {
         };
     }
     document.addEventListener('click', (e) => {
-        const btn = e.target.closest('.file-download');
+        const btn = e.target.closest('.file-download') || e.target.closest('.file-preview-bubble');
         if (!btn || !state.currentActiveChat) return;
         const chat = state.chats.get(state.currentActiveChat);
         if (!chat) return;

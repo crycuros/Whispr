@@ -402,7 +402,7 @@ export function buildMessageElement(msg, chat, peerId) {
         } else if (msg.file) {
             messageContent = fileBubbleHTML(msg.file);
         } else if (msg.imgData) {
-            messageContent = `<img src="${msg.imgData}" style="cursor: pointer; max-width: 100%; border-radius: var(--bubble-radius);" onclick="window.open('${msg.imgData}', '_blank')">`;
+            messageContent = `<img src="${msg.imgData}" style="cursor: pointer; max-width: 350px; max-height: 350px; width: auto; height: auto; border-radius: var(--bubble-radius);" onclick="window.open('${msg.imgData}', '_blank')">`;
         }
         
         const preview = (payloadObj && payloadObj.preview) || msg.preview;
