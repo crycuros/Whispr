@@ -266,7 +266,7 @@ state.ws.onmessage = async (event) => {
             if (state.currentActiveChat === sender && !document.hidden) {
                 const readPacket = buildPacket(CMD_READ, sender, state.myId, "");
                 state.ws.send(obfuscate(readPacket));
-                appendMessage(sender, receivedMsg);
+                appendMessage(sender, chat.messages[chat.messages.length - 1]);
             } else {
                 chat.unreadCount++;
                 
@@ -277,7 +277,7 @@ state.ws.onmessage = async (event) => {
                     new Notification(`New message from ${senderName}`, { body: notifText });
                 }
                 
-                if (state.currentActiveChat === sender) appendMessage(sender, receivedMsg);
+                if (state.currentActiveChat === sender) appendMessage(sender, chat.messages[chat.messages.length - 1]);
             }
             renderChatList();
         }
