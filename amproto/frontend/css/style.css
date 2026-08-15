@@ -2521,7 +2521,7 @@ video {
 
 /* -- Mensayo Plus (Premium) -- */
 .nav-btn#btn-premium.premium {
-    color: #facc15;
+    color: var(--accent);
 }
 .nav-btn#btn-premium.premium::before {
     content: "PLUS";
@@ -2530,8 +2530,8 @@ video {
     right: -6px;
     font-size: 8px;
     font-weight: 700;
-    background: #facc15;
-    color: #000;
+    background: var(--accent);
+    color: #1a1a1a;
     border-radius: 6px;
     padding: 1px 4px;
     letter-spacing: 0.5px;
@@ -2542,10 +2542,10 @@ video {
     max-height: 90vh;
     overflow-y: auto;
     border-radius: 24px;
-    border: 1px solid rgba(250, 204, 21, 0.18);
+    border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
     background:
-        radial-gradient(120% 60% at 100% -10%, rgba(250, 204, 21, 0.16), transparent 55%),
-        radial-gradient(120% 60% at -10% 110%, rgba(250, 204, 21, 0.10), transparent 55%),
+        radial-gradient(120% 60% at 100% -10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 55%),
+        radial-gradient(120% 60% at -10% 110%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%),
         var(--bg-primary);
     box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.14);
     animation: modalPop 0.22s ease-out;
@@ -2571,9 +2571,9 @@ video {
     align-items: center;
     justify-content: center;
     border-radius: 12px;
-    background: linear-gradient(135deg, #facc15, #f59e0b);
-    color: #1a1a1a;
-    box-shadow: 0 4px 14px rgba(250, 204, 21, 0.35);
+    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    color: #1A1A1A;
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 .premium-header h3 {
     flex: 1;
@@ -2583,7 +2583,7 @@ video {
     color: var(--text-primary);
 }
 .premium-header h3 .plus-tag {
-    color: #facc15;
+    color: var(--accent);
 }
 .premium-close-btn {
     width: 32px;
@@ -2611,7 +2611,7 @@ video {
     line-height: 1.5;
 }
 .premium-status.active {
-    color: #facc15;
+    color: var(--accent);
     font-weight: 600;
 }
 .premium-plans {
@@ -2634,15 +2634,15 @@ video {
     transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
 }
 .premium-plan:hover {
-    border-color: rgba(250, 204, 21, 0.5);
+    border-color: color-mix(in srgb, var(--accent) 50%, transparent);
     transform: translateY(-1px);
 }
 .premium-plan.selected {
-    border-color: #facc15;
-    background: rgba(250, 204, 21, 0.12);
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
 }
 .plan-name { font-weight: 600; font-size: 13px; }
-.plan-price { font-weight: 700; font-size: 16px; color: #facc15; }
+.plan-price { font-weight: 700; font-size: 16px; color: var(--accent); }
 .plan-period { font-size: 11px; font-weight: 400; color: var(--text-secondary); }
 .plan-desc { font-size: 11px; color: var(--text-secondary); }
 .premium-checkout {
@@ -2756,8 +2756,8 @@ video {
     gap: 8px;
     padding: 26px 16px 28px;
     border-radius: 18px;
-    border: 1px solid rgba(250, 204, 21, 0.18);
-    background: linear-gradient(160deg, rgba(250, 204, 21, 0.10), rgba(250, 204, 21, 0.02));
+    border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+    background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 12%, transparent), color-mix(in srgb, var(--accent) 2%, transparent));
     margin-bottom: 4px;
 }
 .coming-soon-icon {
@@ -2767,9 +2767,9 @@ video {
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    color: #1a1a1a;
-    background: linear-gradient(135deg, #facc15, #f59e0b);
-    box-shadow: 0 8px 20px rgba(250, 204, 21, 0.35);
+    color: #1A1A1A;
+    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 35%, transparent);
     margin-bottom: 4px;
 }
 .coming-soon-title {
