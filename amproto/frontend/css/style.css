@@ -813,6 +813,36 @@ input { font-family: inherit; }
 .saved-btn:hover { opacity: 1 !important; background: rgba(128, 128, 128, 0.18); }
 .saved-btn.saved-ok { opacity: 1 !important; color: var(--accent); }
 
+/* ===== Message context menu ===== */
+.context-menu {
+    position: fixed;
+    z-index: 9999;
+    min-width: 170px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border, rgba(128, 128, 128, 0.25));
+    border-radius: 8px;
+    padding: 4px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+    animation: context-pop 0.12s ease-out;
+}
+@keyframes context-pop {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+}
+.context-menu-item {
+    display: block;
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 13px;
+    text-align: left;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.context-menu-item:hover { background: var(--accent, #3b82f6); color: #fff; }
+
 /* ===== Vault tabs + Saved Messages ===== */
 .vault-tabs {
     display: flex;

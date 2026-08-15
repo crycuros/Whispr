@@ -430,6 +430,7 @@ function buildMessageElement(msg, chat, peerId) {
         }
 
         if (msg.id) {
+            wrapper.dataset.msgId = String(msg.id);
             const bookmarked = isBookmarked(peerId, msg.id);
             const bmBtn = document.createElement('button');
             bmBtn.className = 'bookmark-btn' + (bookmarked ? ' active' : '');
@@ -533,6 +534,73 @@ async function saveMessageToVault(msg, chat, peerId, saveBtn) {
     }
 }
 
+function setupMessageContextMenu() {
+    const container = document.getElementById('messages');
+    if (!container) return;
+
+    let menu = null;
+    const closeMenu = () => {
+        if (menu) { menu.remove(); menu = null; }
+    };
+
+    container.addEventListener('contextmenu', async (e) => {
+        const row = e.target.closest('.message-row');
+        if (!row || !row.dataset.msgId) return;
+        e.preventDefault();
+        closeMenu();
+
+        const peerId = state.currentActiveChat;
+        const chat = state.chats.get(peerId);
+        const msg = chat ? chat.messages.find(m => String(m.id) === row.dataset.msgId) : null;
+        if (!msg) return;
+
+        menu = document.createElement('div');
+        menu.id = 'msg-context-menu';
+        menu.className = 'context-menu';
+
+        const items = [];
+
+        const doSave = () => {
+            const sb = row.querySelector('.saved-btn');
+            saveMessageToVault(msg, chat, peerId, sb);
+        };
+        const doBookmark = () => {
+            toggleBookmark(peerId, msg.id);
+            if (state.currentActiveChat === peerId) renderMessages(peerId);
+        };
+
+        items.push({ label: 'Save to Vault', action: doSave });
+        items.push({ label: isBookmarked(peerId, msg.id) ? 'Remove Bookmark' : 'Bookmark', action: doBookmark });
+
+        if (!isVoiceMsg(msg)) {
+            const text = payloadTextOf(msg);
+            if (text) items.push({ label: 'Copy Text', action: () => navigator.clipboard && navigator.clipboard.writeText(text) });
+        }
+        const link = payloadLinkOf(msg);
+        if (link) items.push({ label: 'Copy Link', action: () => navigator.clipboard && navigator.clipboard.writeText(link) });
+
+        for (const it of items) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'context-menu-item';
+            btn.textContent = it.label;
+            btn.onclick = (ev) => { ev.stopPropagation(); closeMenu(); it.action(); };
+            menu.appendChild(btn);
+        }
+
+        document.body.appendChild(menu);
+        const mw = menu.offsetWidth;
+        const mh = menu.offsetHeight;
+        menu.style.left = Math.max(8, Math.min(e.clientX, window.innerWidth - mw - 8)) + 'px';
+        menu.style.top = Math.max(8, Math.min(e.clientY, window.innerHeight - mh - 8)) + 'px';
+    });
+
+    document.addEventListener('click', closeMenu);
+    window.addEventListener('scroll', closeMenu, true);
+    window.addEventListener('resize', closeMenu);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
+}
+
 export function showTypingIndicator(username) {
     const bar = document.getElementById('typing-status');
     if (!bar) return;
@@ -548,6 +616,7 @@ export function showTypingIndicator(username) {
 
 export function setupMessageUI() {
     loadBookmarks();
+    setupMessageContextMenu();
     let isInvisibleMode = false;
     const btnInvisible = document.getElementById('btn-invisible-ink');
     if (btnInvisible) {

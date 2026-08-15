@@ -1,6 +1,7 @@
 import { state } from '../core/store.js';
 import * as AMProto from '../core/amproto.js';
 
+const VAULT_SET_FLAG = 'whispr_vault_has_password';
 const SALT = new Uint8Array([11, 22, 33, 44, 55, 66, 77, 88, 99, 10, 11, 12, 13, 14, 15, 16]); // Fixed salt for now
 let vaultKey = null;
 let savedItems = [];
@@ -318,22 +319,58 @@ async function playSavedVoice(item) {
 
 function initVaultUI() {
     const btnUnlock = document.getElementById('btn-unlock-vault');
+    const btnSet = document.getElementById('btn-set-vault');
     const pwdInput = document.getElementById('vault-password');
+    const pwdConfirm = document.getElementById('vault-password-confirm');
     const lockedState = document.getElementById('vault-locked-state');
+    const lockedText = document.getElementById('vault-locked-text');
     const unlockedState = document.getElementById('vault-unlocked-state');
     const uploadInput = document.getElementById('vault-upload-input');
+
+    const hasPassword = () => !!localStorage.getItem(VAULT_SET_FLAG);
+
+    const refreshLockUI = () => {
+        if (!pwdConfirm || !btnSet || !btnUnlock) return;
+        const needsSetup = !hasPassword();
+        pwdConfirm.style.display = needsSetup ? '' : 'none';
+        btnSet.style.display = needsSetup ? '' : 'none';
+        btnUnlock.style.display = needsSetup ? 'none' : '';
+        if (lockedText) {
+            lockedText.textContent = needsSetup
+                ? 'No vault password set yet. Create a master password to encrypt your vault.'
+                : 'Enter your master password to unlock.';
+        }
+    };
+
+    const doUnlock = () => {
+        lockedState.style.display = 'none';
+        pwdInput.parentElement.style.display = 'none';
+        unlockedState.style.display = 'block';
+        loadVaultFiles();
+        loadSavedMessages();
+    };
+
+    if (btnSet) {
+        btnSet.onclick = async () => {
+            if (!pwdInput.value) return;
+            if (pwdInput.value.length < 4) { alert('Password must be at least 4 characters.'); return; }
+            if (pwdInput.value !== pwdConfirm.value) { alert('Passwords do not match.'); return; }
+            localStorage.setItem(VAULT_SET_FLAG, '1');
+            vaultKey = await deriveKey(pwdInput.value);
+            refreshLockUI();
+            doUnlock();
+        };
+    }
 
     if (btnUnlock) {
         btnUnlock.onclick = async () => {
             if (!pwdInput.value) return;
             vaultKey = await deriveKey(pwdInput.value);
-            lockedState.style.display = 'none';
-            pwdInput.parentElement.style.display = 'none';
-            unlockedState.style.display = 'block';
-            loadVaultFiles();
-            loadSavedMessages();
+            doUnlock();
         };
     }
+
+    refreshLockUI();
 
     if (uploadInput) {
         uploadInput.onchange = async (e) => {
