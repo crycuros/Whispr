@@ -1,5 +1,7 @@
 :root {
     --bg: #FAFAF8;
+    --bg-primary: #FFFFFF;
+    --bg-secondary: #F3F4F6;
     --sidebar: #FFFFFF;
     --nav-rail: #111111;
     --nav-icon: #747474;
@@ -46,6 +48,8 @@
 
 [data-theme="dark"] {
     --bg: #2B2D31;
+    --bg-primary: #313338;
+    --bg-secondary: #383A40;
     --sidebar: #313338;
     --nav-rail: #1E1F22;
     --recv-bubble: #383A40;
@@ -62,6 +66,8 @@
 
 [data-theme="amoled"] {
     --bg: #000000;
+    --bg-primary: #000000;
+    --bg-secondary: #111111;
     --sidebar: #000000;
     --nav-rail: #000000;
     --recv-bubble: #111111;
