@@ -4,6 +4,7 @@ import { CMD_READ, CMD_TYPING, CMD_GROUP_MSG, CMD_GROUP_READ, CMD_ENC_MSG, CMD_D
 import { encryptGroupText, encryptBytes, decryptBytes } from '../core/grouplock.js';
 import { isBookmarked, toggleBookmark, loadBookmarks, getBookmarkedMessages, isBookmarkFilterActive, setBookmarkFilterActive } from '../core/bookmarks.js';
 import { persistKeys } from '../core/app.js';
+import { fetchLatest, setupHistoryScroll } from '../core/history.js';
 import { renderPoll } from '../features/polls.js';
 import { fileBubbleHTML, downloadFile } from '../features/files.js';
 
@@ -178,6 +179,8 @@ export function openChat(peerId) {
 
     renderChatList();
     renderMessages(peerId);
+
+    if (chat.messages.length === 0) fetchLatest(peerId);
 
     const input = document.getElementById('msg-input');
     const btn = document.getElementById('btn-send');
@@ -378,7 +381,7 @@ function linkifyMessageText(text) {
     });
 }
 
-function buildMessageElement(msg, chat, peerId) {
+export function buildMessageElement(msg, chat, peerId) {
         const payloadObj = (msg.text && msg.text.startsWith('{')) ? (() => { try { return JSON.parse(msg.text); } catch(e) { return null; } })() : null;
         const isPoll = payloadObj && payloadObj.type === 'poll';
         const isVote = payloadObj && payloadObj.type === 'vote';
@@ -696,6 +699,7 @@ export function setupMessageUI() {
     loadBookmarks();
     setupMessageContextMenu();
     setupTimerSelect();
+    setupHistoryScroll();
     let isInvisibleMode = false;
     const btnInvisible = document.getElementById('btn-invisible-ink');
     if (btnInvisible) {
@@ -1018,6 +1022,7 @@ export function setupMessageUI() {
         };
         
         payloadObj.id = localId;
+        payloadObj.time = Date.now();
         if (payloadObj.type !== 'voice') payloadObj.timer = timerValue;
         if (chat.isGroup) {
             localMsg.senderId = state.myId;

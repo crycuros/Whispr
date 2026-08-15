@@ -15,8 +15,8 @@ exports.handleEncMsg = (ws, packet, rawData, clients, db) => {
             return;
         }
 
-        db.run(`INSERT INTO messages (sender_id, receiver_id, payload, is_read) VALUES (?, ?, ?, ?)`, 
-            [senderId, targetId, payloadStr, clients.has(targetId) ? 1 : 0], 
+        db.run(`INSERT INTO messages (sender_id, receiver_id, payload, is_read, sent_at) VALUES (?, ?, ?, ?, ?)`, 
+            [senderId, targetId, payloadStr, clients.has(targetId) ? 1 : 0, Date.now()], 
             function(err) {
                 if (err) console.error("Error saving message", err);
             }

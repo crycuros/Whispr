@@ -84,6 +84,9 @@ export const CMD_VOICE_GET_OK = 0x49;
 export const CMD_LINK_PREVIEW_REQ = 0x60;
 export const CMD_LINK_PREVIEW_RES = 0x61;
 
+export const CMD_GET_CHAT_HISTORY = 0x62;
+export const CMD_CHAT_HISTORY_RES = 0x63;
+
 export function buildPacket(command, target, sender, payloadString) {
     const payloadBuffer = new TextEncoder().encode(payloadString);
     const payloadLength = payloadBuffer.length;

@@ -34,6 +34,11 @@ db.serialize(() => {
         payload TEXT,
         is_read INTEGER DEFAULT 0
     )`);
+    db.all(`PRAGMA table_info(messages)`, (err, cols) => {
+        if (!err && cols && !cols.some(c => c.name === 'sent_at')) {
+            db.run(`ALTER TABLE messages ADD COLUMN sent_at INTEGER DEFAULT 0`);
+        }
+    });
     db.run(`CREATE TABLE IF NOT EXISTS groups (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,

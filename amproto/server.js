@@ -17,6 +17,7 @@ const savedController = require('./backend/controllers/saved');
 const linkPreview = require('./backend/utils/linkPreview');
 const premiumController = require('./backend/controllers/premium');
 const filesController = require('./backend/controllers/files');
+const historyController = require('./backend/controllers/history');
 
 const PORT = 3000;
 const clients = new Map(); // Map of clientID -> ws connection
@@ -193,6 +194,9 @@ wss.on('connection', (ws) => {
                         const resPacket = AMProto.buildPacket(AMProto.CMD_LINK_PREVIEW_RES, packet.senderId, 0, JSON.stringify(preview || {}));
                         ws.send(AMProto.obfuscate(resPacket));
                     });
+                    break;
+                case AMProto.CMD_GET_CHAT_HISTORY:
+                    historyController.handleGetChatHistory(ws, packet, clients, db);
                     break;
                 default:
                     // Relay other commands (DH_INIT, DH_REPLY, TYPING, READ)

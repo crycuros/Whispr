@@ -95,6 +95,10 @@ class AMProto {
     static CMD_LINK_PREVIEW_REQ = 0x60;
     static CMD_LINK_PREVIEW_RES = 0x61;
     
+    // Chat History (lazy-load older messages)
+    static CMD_GET_CHAT_HISTORY = 0x62;
+    static CMD_CHAT_HISTORY_RES = 0x63;
+    
     // Obfuscation Mask (Simple XOR to hide the header from DPI)
     // In production, this would be a dynamic AES-CTR stream like MTProto FakeTLS.
     static OBFUSCATION_KEY = 0xAB;

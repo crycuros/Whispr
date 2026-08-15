@@ -1,5 +1,5 @@
 import { state } from './store.js';
-import { CMD_LOGIN, CMD_REGISTER_OK, CMD_ERROR, CMD_LOGIN_OK, CMD_RESOLVE_OK, CMD_DH_INIT, CMD_DH_REPLY, CMD_USER_UPDATE_OK, CMD_ENC_MSG, CMD_TYPING, CMD_READ, CMD_GROUP_CREATE_OK, CMD_GROUP_INFO_OK, CMD_GROUP_MSG_RELAY, CMD_GROUP_READ, CMD_MSG_DELETE, CMD_PRESENCE, CMD_RTC_CALL, CMD_RTC_ANSWER, CMD_RTC_REJECT, CMD_RTC_END, CMD_RTC_ICE, CMD_VAULT_UPLOAD_OK, CMD_VAULT_LIST_OK, CMD_VAULT_DOWNLOAD_OK, CMD_LINK_PREVIEW_RES, CMD_REQ_SEND_OK, CMD_REQ_RECEIVED, CMD_REQ_ACCEPTED, CMD_REQ_DECLINED, CMD_REQ_LIST, CMD_REQ_LIST_OK, CMD_IDENTITY_KEY_RES, CMD_GROUP_KEY_GET_OK, CMD_VOICE_UPLOAD_OK, CMD_VOICE_GET_OK, CMD_SAVED_SAVE_OK, CMD_SAVED_LIST_OK, CMD_SAVED_DELETE_OK, CMD_VAULT_CAT_CREATE_OK, CMD_VAULT_CAT_LIST_OK, CMD_VAULT_CAT_DELETE_OK, CMD_SAVED_MOVE_OK, buildPacket, parsePacket, obfuscate, deobfuscate, deriveSharedSecret, decryptPayload } from './amproto.js';
+import { CMD_LOGIN, CMD_REGISTER_OK, CMD_ERROR, CMD_LOGIN_OK, CMD_RESOLVE_OK, CMD_DH_INIT, CMD_DH_REPLY, CMD_USER_UPDATE_OK, CMD_ENC_MSG, CMD_TYPING, CMD_READ, CMD_GROUP_CREATE_OK, CMD_GROUP_INFO_OK, CMD_GROUP_MSG_RELAY, CMD_GROUP_READ, CMD_MSG_DELETE, CMD_PRESENCE, CMD_RTC_CALL, CMD_RTC_ANSWER, CMD_RTC_REJECT, CMD_RTC_END, CMD_RTC_ICE, CMD_VAULT_UPLOAD_OK, CMD_VAULT_LIST_OK, CMD_VAULT_DOWNLOAD_OK, CMD_LINK_PREVIEW_RES, CMD_CHAT_HISTORY_RES, CMD_REQ_SEND_OK, CMD_REQ_RECEIVED, CMD_REQ_ACCEPTED, CMD_REQ_DECLINED, CMD_REQ_LIST, CMD_REQ_LIST_OK, CMD_IDENTITY_KEY_RES, CMD_GROUP_KEY_GET_OK, CMD_VOICE_UPLOAD_OK, CMD_VOICE_GET_OK, CMD_SAVED_SAVE_OK, CMD_SAVED_LIST_OK, CMD_SAVED_DELETE_OK, CMD_VAULT_CAT_CREATE_OK, CMD_VAULT_CAT_LIST_OK, CMD_VAULT_CAT_DELETE_OK, CMD_SAVED_MOVE_OK, buildPacket, parsePacket, obfuscate, deobfuscate, deriveSharedSecret, decryptPayload } from './amproto.js';
 import { setupAuth, showError } from '../features/auth.js';
 import { setupPolls, castVote } from '../features/polls.js';
 import { loadBookmarks } from './bookmarks.js';
@@ -108,6 +108,7 @@ state.ws.onmessage = async (event) => {
 
             await ensureIdentityKeyPair();
             await uploadIdentityKey();
+            await persistKeys();
 
             refreshPremiumStatus();
 
@@ -234,7 +235,7 @@ state.ws.onmessage = async (event) => {
                 preview: msgObj.preview,
                 type: 'received', 
                 isRead: true, 
-                time: Date.now(), 
+                time: msgObj.time || Date.now(), 
                 audioId: msgObj.audioId, 
                 duration: msgObj.duration, 
                 mime: msgObj.mime,
@@ -374,7 +375,7 @@ state.ws.onmessage = async (event) => {
                 preview: msgObj.preview,
                 type: senderId === state.myId ? 'sent' : 'received',
                 isRead: true,
-                time: Date.now(),
+                time: msgObj.time || Date.now(),
                 messageId: messageId
             });
 
@@ -393,6 +394,13 @@ state.ws.onmessage = async (event) => {
             if (state.pendingPreviewCallback) {
                 state.pendingPreviewCallback(data.url ? data : null);
                 state.pendingPreviewCallback = null;
+            }
+        }
+        else if (packet.command === CMD_CHAT_HISTORY_RES) {
+            if (state._historyResolve) {
+                const r = state._historyResolve;
+                state._historyResolve = null;
+                try { r(JSON.parse(packet.payloadString)); } catch (e) { r(null); }
             }
         }
         else if (packet.command === CMD_MSG_DELETE) {
@@ -474,6 +482,9 @@ state.ws.onmessage = async (event) => {
 };
 
 export async function persistKeys() {
+    const HISTORY_STORE_LIMIT = 150;
+    const capMsgs = (arr) => Array.isArray(arr) ? arr.slice(-HISTORY_STORE_LIMIT) : arr;
+
     const exportableKeys = {};
     for (const [peerId, chat] of state.chats.entries()) {
         if (chat.isGroup) {
@@ -485,7 +496,7 @@ export async function persistKeys() {
                 creatorId: chat.creatorId,
                 members: chat.members,
                 memberNames: chat.memberNames || {},
-                messages: chat.messages,
+                messages: capMsgs(chat.messages),
                 isEncrypted: chat.isEncrypted || false
             };
             if (chat.groupKey) {
@@ -495,7 +506,7 @@ export async function persistKeys() {
             exportableKeys[peerId] = groupExport;
             continue;
         }
-        let exportable = { username: chat.username, isSecure: chat.isSecure, messages: chat.messages };
+        let exportable = { username: chat.username, isSecure: chat.isSecure, messages: capMsgs(chat.messages) };
         if (chat.dhKeyPair) {
             const priv = await crypto.subtle.exportKey("pkcs8", chat.dhKeyPair.privateKey);
             const pub = await crypto.subtle.exportKey("raw", chat.dhKeyPair.publicKey);
