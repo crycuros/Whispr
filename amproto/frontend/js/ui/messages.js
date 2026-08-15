@@ -587,9 +587,56 @@ export function showTypingIndicator(username) {
     state.typingTimeout = setTimeout(() => { bar.style.display = 'none'; bar.innerHTML = ''; }, 3000);
 }
 
+function setupTimerSelect() {
+    const wrap = document.getElementById('timer-select-wrap');
+    const btn = document.getElementById('timer-select-btn');
+    const menu = document.getElementById('timer-select-menu');
+    const label = document.getElementById('timer-select-label');
+    const select = document.getElementById('timer-select');
+    if (!btn || !menu || !select) return;
+
+    const closeMenu = () => {
+        menu.style.display = 'none';
+        if (wrap) wrap.classList.remove('open');
+    };
+
+    const setValue = (v) => {
+        select.value = String(v);
+        if (label && select.selectedIndex >= 0) label.textContent = select.options[select.selectedIndex].textContent;
+        menu.querySelectorAll('.timer-select-item').forEach((it) => {
+            it.classList.toggle('active', String(it.dataset.timer) === String(v));
+        });
+        closeMenu();
+    };
+
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = menu.style.display !== 'none';
+        closeMenu();
+        if (!isOpen) {
+            menu.style.display = 'block';
+            if (wrap) wrap.classList.add('open');
+        }
+    });
+
+    menu.addEventListener('click', (e) => {
+        const item = e.target.closest('.timer-select-item');
+        if (item) setValue(item.dataset.timer);
+    });
+
+    document.addEventListener('click', (e) => {
+        if (wrap && !wrap.contains(e.target)) closeMenu();
+    });
+    window.addEventListener('scroll', closeMenu, true);
+    window.addEventListener('resize', closeMenu);
+
+    setValue(select.value || '0');
+}
+
 export function setupMessageUI() {
     loadBookmarks();
     setupMessageContextMenu();
+    setupTimerSelect();
     let isInvisibleMode = false;
     const btnInvisible = document.getElementById('btn-invisible-ink');
     if (btnInvisible) {

@@ -429,7 +429,20 @@
                 <button class="mic-btn" id="btn-mic" title="Voice message"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line></svg></button>
                 <button class="ghost-btn" id="btn-invisible-ink" title="Toggle Invisible Ink" style="margin-right: 8px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
                 
-                <select id="timer-select" style="background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; padding: 4px; margin-right: 8px; outline: none; font-size: 14px;">
+                <div class="timer-select-wrap" id="timer-select-wrap">
+                    <button type="button" class="timer-select-btn" id="timer-select-btn" title="Message timer">
+                        <span id="timer-select-label">Off</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+                    <div class="timer-select-menu" id="timer-select-menu" style="display: none;">
+                        <button type="button" class="timer-select-item" data-timer="0">Off</button>
+                        <button type="button" class="timer-select-item" data-timer="10">10s</button>
+                        <button type="button" class="timer-select-item" data-timer="30">30s</button>
+                        <button type="button" class="timer-select-item" data-timer="60">1m</button>
+                    </div>
+                </div>
+
+                <select id="timer-select" hidden>
                     <option value="0">Off</option>
                     <option value="10">10s</option>
                     <option value="30">30s</option>

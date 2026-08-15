@@ -1180,6 +1180,60 @@ input { font-family: inherit; }
 }
 .input-area input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
 .input-area input:disabled { opacity: 0.6; }
+
+/* ===== Timer select (custom dropdown) ===== */
+.timer-select-wrap {
+    position: relative;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+.timer-select-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 10px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    outline: none;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.timer-select-btn:hover { background: var(--bg-secondary); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.timer-select-btn svg { transition: transform 0.15s ease; }
+.timer-select-wrap.open .timer-select-btn svg { transform: rotate(180deg); }
+.timer-select-menu {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    min-width: 124px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-lg);
+    padding: 4px;
+    z-index: 9999;
+    animation: context-pop 0.12s ease-out;
+}
+.timer-select-item {
+    display: block;
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    text-align: left;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.timer-select-item:hover { background: var(--bg-secondary); }
+.timer-select-item.active { background: color-mix(in srgb, var(--accent) 18%, transparent); font-weight: 600; }
 #btn-send {
     width: clamp(34px, 3cqw, 44px);
     height: clamp(34px, 3cqw, 44px);
@@ -1212,7 +1266,7 @@ html[data-panel="mobile"] .messages-panel.mobile-visible { display: flex; positi
 html[data-panel="mobile"] .input-area { gap: 4px; padding: 8px; }
 html[data-panel="mobile"] .ghost-btn { width: 28px !important; height: 28px !important; }
 html[data-panel="mobile"] .back-to-list { display: flex; }
-html[data-panel="mobile"] #timer-select { display: none; }
+html[data-panel="mobile"] #timer-select, html[data-panel="mobile"] .timer-select-wrap { display: none; }
 html[data-panel="mobile"] .messages-container { padding: 14px 12px; }
 html[data-panel="mobile"] .message-row { max-width: 82%; }
 html[data-panel="mobile"] .input-area .ghost-btn, html[data-panel="mobile"] .input-area .mic-btn { display: none; }
