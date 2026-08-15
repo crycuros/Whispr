@@ -844,7 +844,7 @@ input { font-family: inherit; }
     position: fixed;
     z-index: 9999;
     min-width: 170px;
-    background: var(--bg-secondary);
+    background: var(--bg-secondary, #F3F4F6);
     border: 1px solid var(--border, rgba(128, 128, 128, 0.25));
     border-radius: 8px;
     padding: 4px;
