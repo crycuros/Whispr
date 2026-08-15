@@ -213,7 +213,7 @@ function openMediaViewer(url, mimeType, filename) {
         modal.className = 'modal-overlay media-viewer';
         modal.innerHTML = `
             <div class="media-viewer-content" style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(0,0,0,0.9); position:relative;">
-                <button class="icon-btn close-btn" style="position:absolute; top:20px; right:20px; color:white; z-index:100; background:rgba(255,255,255,0.2); padding:8px; border-radius:50%;" onclick="const p = this.closest('.modal-overlay'); p.classList.remove('show'); const v = p.querySelector('video'); if(v) v.pause();">
+                <button class="icon-btn close-btn" style="position:absolute; top:20px; right:20px; color:white; z-index:100; background:rgba(255,255,255,0.2); padding:8px; border-radius:50%;" onclick="const p = this.closest('.modal-overlay'); const v = p.querySelector('video'); if(v) v.pause(); p.remove();">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
                 <div id="media-viewer-container" style="max-width:90%; max-height:80vh; display:flex; justify-content:center; align-items:center;"></div>
@@ -232,8 +232,6 @@ function openMediaViewer(url, mimeType, filename) {
     } else {
         container.innerHTML = `<video src="${url}" class="media-full" style="max-width:100%; max-height:80vh;" controls autoplay playsinline></video>`;
     }
-    
-    modal.classList.add('show');
 }
 
 export function fileBubbleHTML(file) {
