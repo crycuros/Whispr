@@ -7,6 +7,20 @@ let vaultKey = null;
 let savedItems = [];
 let categories = [];
 let savedCatFilter = null;
+let pendingSave = null;
+
+export function showVaultToast(message) {
+    let t = document.getElementById('app-toast');
+    if (!t) {
+        t = document.createElement('div');
+        t.id = 'app-toast';
+        document.body.appendChild(t);
+    }
+    t.textContent = message;
+    t.classList.add('show');
+    clearTimeout(t._t);
+    t._t = setTimeout(() => t.classList.remove('show'), 2200);
+}
 
 async function deriveKey(password) {
     const enc = new TextEncoder();
@@ -82,6 +96,33 @@ export async function decryptFromVault(b64) {
 export function openVaultPanel() {
     const btnFiles = document.getElementById('btn-files');
     if (btnFiles) btnFiles.click();
+    showVaultAuth();
+}
+
+function showVaultAuth() {
+    const welcome = document.getElementById('vault-welcome');
+    const lockedState = document.getElementById('vault-locked-state');
+    const lockedText = document.getElementById('vault-locked-text');
+    const setupLaterBtn = document.getElementById('btn-vault-setup-later');
+    const authForm = document.getElementById('vault-auth-form');
+    const pwdConfirm = document.getElementById('vault-password-confirm');
+    const btnSet = document.getElementById('btn-set-vault');
+    const btnUnlock = document.getElementById('btn-unlock-vault');
+    if (!welcome || !authForm) return;
+    if (localStorage.getItem(VAULT_SET_FLAG)) {
+        welcome.style.display = 'none';
+        lockedState.style.display = '';
+        setupLaterBtn.style.display = 'none';
+        lockedText.textContent = 'Enter your master password to unlock.';
+        authForm.style.display = 'flex';
+        pwdConfirm.style.display = 'none';
+        btnSet.style.display = 'none';
+        btnUnlock.style.display = '';
+    } else {
+        welcome.style.display = '';
+        lockedState.style.display = 'none';
+        authForm.style.display = 'none';
+    }
 }
 
 function sendSavedSave(msgType, contentEnc, metaEnc) {
@@ -94,17 +135,35 @@ function sendSavedSave(msgType, contentEnc, metaEnc) {
     if (state.ws) state.ws.send(AMProto.obfuscate(packet));
 }
 
-export async function saveToVault(msgType, contentBytes, meta) {
-    if (!vaultKey) {
+export function saveToVault(msgType, contentBytes, meta) {
+    return new Promise((resolve) => {
+        const doSave = async () => {
+            try {
+                const contentEnc = await encryptForVault(contentBytes);
+                const metaEnc = await encryptForVault(new TextEncoder().encode(JSON.stringify(meta)));
+                sendSavedSave(msgType, contentEnc, metaEnc);
+                resolve(true);
+            } catch (e) {
+                console.error('vault save error:', e);
+                resolve(false);
+            }
+        };
+        if (vaultKey) {
+            doSave();
+            return;
+        }
+        pendingSave = { resolve, save: doSave };
         openVaultPanel();
-        const pwd = document.getElementById('vault-password');
-        if (pwd) setTimeout(() => pwd.focus(), 50);
-        return false;
-    }
-    const contentEnc = await encryptForVault(contentBytes);
-    const metaEnc = await encryptForVault(new TextEncoder().encode(JSON.stringify(meta)));
-    sendSavedSave(msgType, contentEnc, metaEnc);
-    return true;
+        setTimeout(() => {
+            if (localStorage.getItem(VAULT_SET_FLAG)) {
+                const pwd = document.getElementById('vault-password');
+                if (pwd) pwd.focus();
+            } else {
+                const create = document.getElementById('btn-vault-create');
+                if (create) create.focus();
+            }
+        }, 50);
+    });
 }
 
 export function loadSavedMessages() {
@@ -476,33 +535,58 @@ function initVaultUI() {
     const btnSet = document.getElementById('btn-set-vault');
     const pwdInput = document.getElementById('vault-password');
     const pwdConfirm = document.getElementById('vault-password-confirm');
+    const authArea = document.getElementById('vault-auth');
+    const welcome = document.getElementById('vault-welcome');
     const lockedState = document.getElementById('vault-locked-state');
     const lockedText = document.getElementById('vault-locked-text');
+    const setupLaterBtn = document.getElementById('btn-vault-setup-later');
+    const authForm = document.getElementById('vault-auth-form');
+    const btnCreate = document.getElementById('btn-vault-create');
+    const btnLater = document.getElementById('btn-vault-later');
     const unlockedState = document.getElementById('vault-unlocked-state');
     const uploadInput = document.getElementById('vault-upload-input');
 
     const hasPassword = () => !!localStorage.getItem(VAULT_SET_FLAG);
 
-    const refreshLockUI = () => {
-        if (!pwdConfirm || !btnSet || !btnUnlock) return;
-        const needsSetup = !hasPassword();
-        pwdConfirm.style.display = needsSetup ? '' : 'none';
-        btnSet.style.display = needsSetup ? '' : 'none';
-        btnUnlock.style.display = needsSetup ? 'none' : '';
-        if (lockedText) {
-            lockedText.textContent = needsSetup
-                ? 'No vault password set yet. Create a master password to encrypt your vault.'
-                : 'Enter your master password to unlock.';
-        }
+    const showSetupForm = () => {
+        welcome.style.display = 'none';
+        lockedState.style.display = 'none';
+        authForm.style.display = 'flex';
+        pwdConfirm.style.display = '';
+        btnSet.style.display = '';
+        btnUnlock.style.display = 'none';
+        pwdInput.focus();
     };
 
+    const abortPendingSave = () => {
+        const p = pendingSave; pendingSave = null;
+        if (p) p.resolve(false);
+    };
+
+    if (btnCreate) {
+        btnCreate.onclick = () => showSetupForm();
+    }
+    if (btnLater) {
+        btnLater.onclick = () => {
+            welcome.style.display = 'none';
+            lockedState.style.display = '';
+            setupLaterBtn.style.display = '';
+            lockedText.textContent = 'No vault yet. You can set one up anytime from here.';
+            abortPendingSave();
+        };
+    }
+    if (setupLaterBtn) {
+        setupLaterBtn.onclick = () => showSetupForm();
+    }
+
     const doUnlock = () => {
-        lockedState.style.display = 'none';
-        pwdInput.parentElement.style.display = 'none';
+        authArea.style.display = 'none';
         unlockedState.style.display = 'block';
         loadVaultFiles();
         loadSavedMessages();
         loadCategories();
+        const p = pendingSave; pendingSave = null;
+        if (p) p.save();
     };
 
     if (btnSet) {
@@ -524,7 +608,7 @@ function initVaultUI() {
         };
     }
 
-    refreshLockUI();
+    showVaultAuth();
     setupNewCategoryInput();
 
     if (uploadInput) {

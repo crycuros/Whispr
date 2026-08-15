@@ -431,29 +431,6 @@ function buildMessageElement(msg, chat, peerId) {
 
         if (msg.id) {
             wrapper.dataset.msgId = String(msg.id);
-            const bookmarked = isBookmarked(peerId, msg.id);
-            const bmBtn = document.createElement('button');
-            bmBtn.className = 'bookmark-btn' + (bookmarked ? ' active' : '');
-            bmBtn.title = bookmarked ? 'Remove bookmark' : 'Bookmark message';
-            bmBtn.innerHTML = bookmarked ? bookmarkSVGFilled : bookmarkSVGOutline;
-            bmBtn.onclick = (e) => {
-                e.stopPropagation();
-                const nowBookmarked = toggleBookmark(peerId, msg.id);
-                bmBtn.classList.toggle('active', nowBookmarked);
-                bmBtn.title = nowBookmarked ? 'Remove bookmark' : 'Bookmark message';
-                bmBtn.innerHTML = nowBookmarked ? bookmarkSVGFilled : bookmarkSVGOutline;
-            };
-            wrapper.appendChild(bmBtn);
-
-            const saveBtn = document.createElement('button');
-            saveBtn.className = 'saved-btn';
-            saveBtn.title = 'Save to Vault';
-            saveBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>`;
-            saveBtn.onclick = (e) => {
-                e.stopPropagation();
-                saveMessageToVault(msg, chat, peerId, saveBtn);
-            };
-            wrapper.appendChild(saveBtn);
         }
 
         return wrapper;
@@ -492,7 +469,7 @@ async function resolveVoiceBlob(msg, chat) {
     }
 }
 
-async function saveMessageToVault(msg, chat, peerId, saveBtn) {
+async function saveMessageToVault(msg, chat, peerId) {
     const Vault = await import('../features/vault.js');
     const source = chat.isGroup ? chat.username : (msg.type === 'received' ? chat.username : state.myUsername);
     const meta = { type: 'text', source, time: formatTime(msg.time) };
@@ -525,10 +502,7 @@ async function saveMessageToVault(msg, chat, peerId, saveBtn) {
         }
 
         const ok = await Vault.saveToVault(meta.type, contentBytes, meta);
-        if (ok && saveBtn) {
-            saveBtn.classList.add('saved-ok');
-            setTimeout(() => saveBtn.classList.remove('saved-ok'), 1200);
-        }
+        if (ok) Vault.showVaultToast('Saved to Vault');
     } catch (err) {
         console.error('save error:', err);
     }
@@ -561,8 +535,7 @@ function setupMessageContextMenu() {
         const items = [];
 
         const doSave = () => {
-            const sb = row.querySelector('.saved-btn');
-            saveMessageToVault(msg, chat, peerId, sb);
+            saveMessageToVault(msg, chat, peerId);
         };
         const doBookmark = () => {
             toggleBookmark(peerId, msg.id);
