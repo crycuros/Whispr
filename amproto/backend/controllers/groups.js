@@ -69,7 +69,7 @@ exports.handleGroupMsg = (ws, packet, clients, db) => {
                             
                             rows.forEach(memberRow => {
                                 const memberId = memberRow.user_id;
-                                if (memberId !== senderId && clients.has(memberId)) {
+                                if (clients.has(memberId)) {
                                     const targetWs = clients.get(memberId);
                                     if (targetWs.readyState === WebSocket.OPEN) {
                                         console.log(`[Group] Relaying to ${memberId}`);
@@ -78,7 +78,7 @@ exports.handleGroupMsg = (ws, packet, clients, db) => {
                                     } else {
                                         console.log(`[Group] Socket for ${memberId} not open`);
                                     }
-                                } else if (memberId !== senderId) {
+                                } else {
                                     console.log(`[Group] Member ${memberId} is offline`);
                                 }
                             });
@@ -92,11 +92,13 @@ exports.handleGroupMsg = (ws, packet, clients, db) => {
 
 exports.handleGroupRead = (ws, packet, db) => {
     const { groupId, lastReadMsgId } = JSON.parse(packet.payloadString);
+    const numericId = parseInt(lastReadMsgId, 10);
+    if (isNaN(numericId) || numericId <= 0) return;
     db.run(`
         INSERT INTO group_read (group_id, user_id, last_read) 
         VALUES (?, ?, ?) 
-        ON CONFLICT(group_id, user_id) DO UPDATE SET last_read = max(last_read, excluded.last_read)
-    `, [groupId, packet.senderId, lastReadMsgId], (err) => {
+        ON CONFLICT(group_id, user_id) DO UPDATE SET last_read = excluded.last_read
+    `, [groupId, packet.senderId, numericId], (err) => {
         if (err) console.error("Error upserting group_read", err);
     });
 };

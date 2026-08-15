@@ -301,6 +301,24 @@ state.ws.onmessage = async (event) => {
                 msgObj = { text: text };
             }
 
+            const matchId = msgObj.id || messageId;
+            const existing = chat.messages.find(m => m.id === matchId);
+            if (existing) {
+                existing.messageId = messageId;
+                if (msgObj.timer !== undefined) existing.timer = msgObj.timer;
+                if (msgObj.text) existing.text = msgObj.text;
+                if (msgObj.imgData) existing.imgData = msgObj.imgData;
+                if (msgObj.isInvisible !== undefined) existing.isInvisible = msgObj.isInvisible;
+                if (state.currentActiveChat === groupPeerId) {
+                    const groupReadPacket = buildPacket(CMD_GROUP_READ, 0, state.myId, JSON.stringify({ groupId: chat.groupId, lastReadMsgId: messageId }));
+                    state.ws.send(obfuscate(groupReadPacket));
+                }
+                await persistKeys();
+                renderChatList();
+                if (state.currentActiveChat === groupPeerId) renderMessages(groupPeerId);
+                return;
+            }
+
             chat.messages.push({
                 id: msgObj.id || messageId,
                 timer: msgObj.timer,
@@ -317,7 +335,7 @@ state.ws.onmessage = async (event) => {
 
             if (state.currentActiveChat === groupPeerId) {
                 appendMessage(groupPeerId, chat.messages[chat.messages.length - 1]);
-                const groupReadPacket = buildPacket(CMD_GROUP_READ, 0, state.myId, JSON.stringify({ groupId: chat.groupId, lastReadMsgId: chat.messages[chat.messages.length - 1].id }));
+                const groupReadPacket = buildPacket(CMD_GROUP_READ, 0, state.myId, JSON.stringify({ groupId: chat.groupId, lastReadMsgId: messageId }));
                 state.ws.send(obfuscate(groupReadPacket));
             } else {
                 chat.unreadCount++;

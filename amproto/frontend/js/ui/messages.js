@@ -23,15 +23,13 @@ export function openChat(peerId) {
     if (chat.isGroup) {
         updateGroupStatus(peerId);
     } else {
-        const pop = document.getElementById('members-popover');
-        if (pop) pop.style.display = 'none';
         updateChatStatus(peerId);
     }
 
     if (chat.unreadCount > 0) {
         if (chat.isGroup) {
             const lastMsg = chat.messages[chat.messages.length - 1];
-            const readPacket = buildPacket(CMD_GROUP_READ, 0, state.myId, JSON.stringify({ groupId: chat.groupId, lastReadMsgId: lastMsg ? lastMsg.id : 0 }));
+            const readPacket = buildPacket(CMD_GROUP_READ, 0, state.myId, JSON.stringify({ groupId: chat.groupId, lastReadMsgId: lastMsg ? (lastMsg.messageId || 0) : 0 }));
             if (state.ws) state.ws.send(obfuscate(readPacket));
         } else {
             const readPacket = buildPacket(CMD_READ, peerId, state.myId, "");
@@ -123,8 +121,8 @@ export function updateChatStatus(peerId) {
     if (p && p.online) {
         statusEl.innerText = 'Present';
         statusEl.className = 'status-text text-success';
-    } else if (p && p.lastSeen) {
-        statusEl.innerText = `Away (${formatListTime(p.lastSeen)})`;
+    } else if (p && !p.online) {
+        statusEl.innerText = p.lastSeen ? `Away (${formatListTime(p.lastSeen)})` : 'Offline';
         statusEl.className = 'status-text text-muted';
     } else {
         statusEl.innerText = 'Connecting...';
@@ -337,12 +335,12 @@ export function setupMessageUI() {
             e.stopPropagation();
             const chat = state.chats.get(state.currentActiveChat);
             if (chat && chat.isGroup) {
-            if (popover.style.display === 'block') {
-                popover.style.display = 'none';
-            } else {
-                renderMembersPopover(state.currentActiveChat);
-                popover.style.display = 'block';
-            }
+                if (popover.style.display === 'block') {
+                    popover.style.display = 'none';
+                } else {
+                    renderMembersPopover(state.currentActiveChat);
+                    popover.style.display = 'block';
+                }
             }
         };
         document.addEventListener('click', (e) => {

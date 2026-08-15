@@ -34,22 +34,23 @@ db.serialize(() => {
         name TEXT NOT NULL,
         created_by INTEGER NOT NULL,
         is_feed INTEGER DEFAULT 0,
+        created_at INTEGER DEFAULT (strftime('%s','now')),
         description TEXT,
         avatar_url TEXT
     )`);
     db.run(`CREATE TABLE IF NOT EXISTS group_members (
-        group_id INTEGER,
-        user_id INTEGER,
+        group_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
         role TEXT DEFAULT 'member',
-        joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        joined_at INTEGER DEFAULT (strftime('%s','now')),
         PRIMARY KEY (group_id, user_id)
     )`);
     db.run(`CREATE TABLE IF NOT EXISTS group_messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        group_id INTEGER,
-        sender_id INTEGER,
-        payload TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        group_id INTEGER NOT NULL,
+        sender_id INTEGER NOT NULL,
+        text TEXT NOT NULL,
+        sent_at INTEGER DEFAULT (strftime('%s','now'))
     )`);
     db.run(`CREATE TABLE IF NOT EXISTS group_read (
         group_id INTEGER,
