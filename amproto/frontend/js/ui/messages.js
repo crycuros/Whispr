@@ -565,20 +565,44 @@ function setupMessageContextMenu() {
         const link = payloadLinkOf(msg);
         if (link) items.push({ label: 'Copy Link', action: () => navigator.clipboard && navigator.clipboard.writeText(link) });
 
+        if (msg.type === 'sent') {
+            items.push({ divider: true });
+            items.push({
+                label: 'Delete Message',
+                danger: true,
+                action: () => {
+                    chat.messages = chat.messages.filter(m => m.id !== msg.id);
+                    if (state.currentActiveChat === peerId) renderMessages(peerId);
+                    import('../core/app.js').then(a => a.persistKeys && a.persistKeys());
+                    import('../core/amproto.js').then(AMP => {
+                        const packet = AMP.buildPacket(AMP.CMD_MSG_DELETE, chat.isGroup ? 0 : peerId, state.myId, JSON.stringify({ msgId: msg.id, isGroup: chat.isGroup, groupId: chat.groupId }));
+                        if (state.ws) state.ws.send(AMP.obfuscate(packet));
+                    });
+                }
+            });
+        }
+
         for (const it of items) {
+            if (it.divider) {
+                const div = document.createElement('div');
+                div.className = 'context-menu-divider';
+                menu.appendChild(div);
+                continue;
+            }
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'context-menu-item';
+            btn.className = 'context-menu-item' + (it.danger ? ' danger' : '');
             btn.textContent = it.label;
             btn.onclick = (ev) => { ev.stopPropagation(); closeMenu(); it.action(); };
             menu.appendChild(btn);
         }
 
         document.body.appendChild(menu);
-        const mw = menu.offsetWidth;
-        const mh = menu.offsetHeight;
-        menu.style.left = Math.max(8, Math.min(e.clientX, window.innerWidth - mw - 8)) + 'px';
-        menu.style.top = Math.max(8, Math.min(e.clientY, window.innerHeight - mh - 8)) + 'px';
+        const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+        const mw = menu.offsetWidth * zoom;
+        const mh = menu.offsetHeight * zoom;
+        menu.style.left = (Math.max(8, Math.min(e.clientX, window.innerWidth - mw - 8)) / zoom) + 'px';
+        menu.style.top = (Math.max(8, Math.min(e.clientY, window.innerHeight - mh - 8)) / zoom) + 'px';
     });
 
     document.addEventListener('click', closeMenu);

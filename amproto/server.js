@@ -101,7 +101,7 @@ wss.on('connection', (ws) => {
                     keysController.handleGroupKeyGet(ws, packet, db);
                     break;
                 case AMProto.CMD_MSG_DELETE:
-                    messagesController.handleMsgDelete(ws, packet, clients, db);
+                    messagesController.handleMsgDelete(ws, packet, rawData, clients, db);
                     break;
                 case AMProto.CMD_VAULT_UPLOAD:
                     vaultController.handleVaultUpload(ws, packet, clients, db);

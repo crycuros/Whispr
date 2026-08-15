@@ -34,7 +34,7 @@ exports.handleEncMsg = (ws, packet, rawData, clients, db) => {
     });
 };
 
-exports.handleMsgDelete = (ws, packet, clients, db) => {
+exports.handleMsgDelete = (ws, packet, rawData, clients, db) => {
     const payload = JSON.parse(packet.payloadString);
     const { msgId, isGroup, groupId } = payload;
     const senderId = packet.senderId;
@@ -50,7 +50,7 @@ exports.handleMsgDelete = (ws, packet, clients, db) => {
                 if (row.user_id !== senderId && clients.has(row.user_id)) {
                     const targetWs = clients.get(row.user_id);
                     if (targetWs.readyState === WebSocket.OPEN) {
-                        targetWs.send(packet.rawData);
+                        targetWs.send(rawData);
                     }
                 }
             });
@@ -64,7 +64,7 @@ exports.handleMsgDelete = (ws, packet, clients, db) => {
         if (clients.has(targetId)) {
             const targetWs = clients.get(targetId);
             if (targetWs.readyState === WebSocket.OPEN) {
-                targetWs.send(packet.rawData);
+                targetWs.send(rawData);
             }
         }
     }
