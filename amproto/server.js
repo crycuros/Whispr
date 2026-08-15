@@ -15,13 +15,61 @@ const keysController = require('./backend/controllers/keys');
 const voiceController = require('./backend/controllers/voice');
 const savedController = require('./backend/controllers/saved');
 const linkPreview = require('./backend/utils/linkPreview');
+const premiumController = require('./backend/controllers/premium');
+const filesController = require('./backend/controllers/files');
 
 const PORT = 3000;
 const clients = new Map(); // Map of clientID -> ws connection
 
-// 1. Static File Server for our UI
+// 1. Static File Server + API routes for our UI
 const server = http.createServer((req, res) => {
-    let filePath = path.join(__dirname, 'frontend', req.url === '/' ? 'index.html' : req.url);
+    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const pathname = url.pathname;
+    const method = req.method;
+
+    // --- API routes ---
+    if (method === 'POST' && pathname === '/api/premium/purchase') {
+        premiumController.handlePurchase(req, res, db);
+        return;
+    }
+    if (method === 'POST' && pathname === '/api/premium/status') {
+        premiumController.handleStatus(req, res, db);
+        return;
+    }
+    if (method === 'POST' && pathname === '/api/upload/init') {
+        filesController.handleUploadInit(req, res, db);
+        return;
+    }
+    const chunkMatch = /^\/api\/upload\/chunk\/([^/]+)\/(\d+)$/.exec(pathname);
+    if (method === 'POST' && chunkMatch) {
+        filesController.handleUploadChunk(req, res, db, chunkMatch[1], chunkMatch[2]);
+        return;
+    }
+    const finishMatch = /^\/api\/upload\/finish\/([^/]+)$/.exec(pathname);
+    if (method === 'POST' && finishMatch) {
+        filesController.handleUploadFinish(req, res, db, finishMatch[1]);
+        return;
+    }
+    const fileMetaMatch = /^\/api\/file\/(\d+)\/meta$/.exec(pathname);
+    if (method === 'GET' && fileMetaMatch) {
+        filesController.handleFileMeta(req, res, db, fileMetaMatch[1]);
+        return;
+    }
+    const fileMatch = /^\/api\/file\/(\d+)$/.exec(pathname);
+    if (method === 'GET' && fileMatch) {
+        filesController.handleFileDownload(req, res, db, fileMatch[1]);
+        return;
+    }
+
+    // --- Static files ---
+    const frontendRoot = path.join(__dirname, 'frontend');
+    let filePath = path.resolve(frontendRoot, '.' + decodeURIComponent(pathname));
+    if (pathname === '/') filePath = path.join(frontendRoot, 'index.html');
+    if (!filePath.startsWith(frontendRoot)) {
+        res.writeHead(403);
+        res.end('Forbidden');
+        return;
+    }
     const extname = path.extname(filePath);
     let contentType = 'text/html';
     

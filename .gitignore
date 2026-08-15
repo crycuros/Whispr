@@ -4,3 +4,6 @@ node_modules/
 bin/
 obj/
 whispr_keys.enc
+
+amproto/.premium_secret
+amproto/uploads/

@@ -33,7 +33,7 @@ exports.handleLogin = (ws, packet, clients, db, setMyIdCallback) => {
         
         if (sessionToken) {
             // Login via session token
-            db.get(`SELECT id, username, avatar_url, bio, theme_color, preferences FROM users WHERE username = ? AND session_token = ?`, [username, sessionToken], (err, row) => {
+            db.get(`SELECT id, username, avatar_url, bio, theme_color, preferences, premium_until FROM users WHERE username = ? AND session_token = ?`, [username, sessionToken], (err, row) => {
                 if (err || !row) {
                     const errPacket = AMProto.buildPacket(AMProto.CMD_ERROR, packet.senderId, 0, JSON.stringify({ message: 'Invalid session' }));
                     ws.send(AMProto.obfuscate(errPacket));
@@ -43,7 +43,7 @@ exports.handleLogin = (ws, packet, clients, db, setMyIdCallback) => {
             });
         } else {
             // Login via password
-            db.get(`SELECT id, username, password, avatar_url, bio, theme_color, preferences FROM users WHERE username = ?`, [username], (err, row) => {
+            db.get(`SELECT id, username, password, avatar_url, bio, theme_color, preferences, premium_until FROM users WHERE username = ?`, [username], (err, row) => {
                 if (err || !row) {
                     const errPacket = AMProto.buildPacket(AMProto.CMD_ERROR, packet.senderId, 0, JSON.stringify({ message: 'Login failed' }));
                     ws.send(AMProto.obfuscate(errPacket));
@@ -106,6 +106,7 @@ function completeLogin(ws, packet, clients, db, setMyIdCallback, row, sessionTok
         bio: row.bio,
         themeColor: row.theme_color,
         preferences: prefs,
+        premiumUntil: row.premium_until || 0,
         sessionToken: sessionToken
     }));
     ws.send(AMProto.obfuscate(okPacket));

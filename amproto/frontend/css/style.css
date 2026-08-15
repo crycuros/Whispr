@@ -2518,3 +2518,159 @@ video {
     0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
     30% { transform: translateY(-4px); opacity: 1; }
 }
+
+/* -- Mensayo Plus (Premium) -- */
+.nav-btn#btn-premium.premium {
+    color: #facc15;
+}
+.nav-btn#btn-premium.premium::before {
+    content: "PLUS";
+    position: absolute;
+    top: -2px;
+    right: -6px;
+    font-size: 8px;
+    font-weight: 700;
+    background: #facc15;
+    color: #000;
+    border-radius: 6px;
+    padding: 1px 4px;
+    letter-spacing: 0.5px;
+}
+.premium-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #facc15;
+    margin-bottom: 12px;
+}
+.premium-status {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0 0 16px;
+}
+.premium-status.active {
+    color: #facc15;
+    font-weight: 600;
+}
+.premium-plans {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+.premium-plan {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 12px 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+.premium-plan.selected {
+    border-color: #facc15;
+    background: rgba(250, 204, 21, 0.12);
+}
+.plan-name { font-weight: 600; font-size: 13px; }
+.plan-price { font-weight: 700; font-size: 16px; color: #facc15; }
+.plan-period { font-size: 11px; font-weight: 400; color: var(--text-secondary); }
+.plan-desc { font-size: 11px; color: var(--text-secondary); }
+.premium-checkout {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+.premium-checkout .panel-input {
+    width: 100%;
+    box-sizing: border-box;
+}
+.premium-msg {
+    font-size: 12px;
+    color: #ef4444;
+    min-height: 16px;
+    margin: 0;
+}
+.premium-msg.ok {
+    color: #10b981;
+}
+
+/* -- File bubbles -- */
+.file-bubble {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 200px;
+    max-width: 260px;
+    padding: 2px 0;
+}
+.file-icon {
+    flex: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.15);
+    color: inherit;
+}
+.file-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.file-name {
+    font-size: 13px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.file-size {
+    font-size: 11px;
+    opacity: 0.7;
+}
+.file-download {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.18);
+    color: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.file-download:hover {
+    background: rgba(255, 255, 255, 0.32);
+}
+.file-upload-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 220px;
+}
+.progress-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+.progress-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--accent, #3b82f6);
+    transition: width 0.15s ease;
+}
+.progress-label {
+    font-size: 11px;
+    opacity: 0.8;
+}

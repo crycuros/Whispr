@@ -20,5 +20,8 @@ export const state = {
     typingTimeout: null,
     presence: new Map(), // userId -> { online, lastSeen }
     identityKeyPair: null,
-    ws: null
+    ws: null,
+    premiumUntil: 0,
+    subscriptionToken: null,
+    selectedPlan: null
 };

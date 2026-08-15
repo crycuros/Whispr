@@ -11,6 +11,8 @@ import * as WebRTC from '../features/webrtc.js';
 import * as Vault from '../features/vault.js';
 import { initCallUI } from '../ui/callUI.js';
 import { ensureIdentityKeyPair, uploadIdentityKey, handleIdentityKeyRes, handleGroupKeyGetOk, ensureGroupKey, decryptGroupText } from './grouplock.js';
+import { setupPremium, applyPremiumState, refreshPremiumStatus } from '../features/premium.js';
+import { setupFileHandlers } from '../features/files.js';
 
 if (localStorage.getItem('whispr_session')) {
     document.getElementById('auth-modal').style.display = 'none';
@@ -75,6 +77,9 @@ state.ws.onmessage = async (event) => {
             
             state.myPreferences = data.preferences || {};
             applyPreferences(state.myPreferences);
+
+            state.premiumUntil = data.premiumUntil || 0;
+            applyPremiumState(data.premiumUntil || 0);
             
             if (data.sessionToken) {
                 localStorage.setItem('whispr_session', JSON.stringify({ user: data.username, token: data.sessionToken }));
@@ -103,6 +108,8 @@ state.ws.onmessage = async (event) => {
 
             await ensureIdentityKeyPair();
             await uploadIdentityKey();
+
+            refreshPremiumStatus();
 
             const reqListPacket = buildPacket(CMD_REQ_LIST, 0, state.myId, '{}');
             state.ws.send(obfuscate(reqListPacket));
@@ -229,7 +236,8 @@ state.ws.onmessage = async (event) => {
                 time: Date.now(), 
                 audioId: msgObj.audioId, 
                 duration: msgObj.duration, 
-                mime: msgObj.mime 
+                mime: msgObj.mime,
+                file: msgObj.file
             });
             chat.typing = false;
             await persistKeys();
@@ -338,6 +346,7 @@ state.ws.onmessage = async (event) => {
                 if (msgObj.audioId) existing.audioId = msgObj.audioId;
                 if (msgObj.duration) existing.duration = msgObj.duration;
                 if (msgObj.mime) existing.mime = msgObj.mime;
+                if (msgObj.file) existing.file = msgObj.file;
                 if (state.currentActiveChat === groupPeerId) {
                     const groupReadPacket = buildPacket(CMD_GROUP_READ, 0, state.myId, JSON.stringify({ groupId: chat.groupId, lastReadMsgId: messageId }));
                     state.ws.send(obfuscate(groupReadPacket));
@@ -359,6 +368,7 @@ state.ws.onmessage = async (event) => {
                 audioId: msgObj.audioId,
                 duration: msgObj.duration,
                 mime: msgObj.mime,
+                file: msgObj.file,
                 type: senderId === state.myId ? 'sent' : 'received',
                 isRead: true,
                 time: Date.now(),
@@ -620,3 +630,5 @@ setupPolls();
 window.castVote = castVote;
 setupModals();
 initCallUI();
+setupPremium();
+setupFileHandlers();

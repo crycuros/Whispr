@@ -5,6 +5,7 @@ import { encryptGroupText, encryptBytes, decryptBytes } from '../core/grouplock.
 import { isBookmarked, toggleBookmark, loadBookmarks, getBookmarkedMessages, isBookmarkFilterActive, setBookmarkFilterActive } from '../core/bookmarks.js';
 import { persistKeys } from '../core/app.js';
 import { renderPoll } from '../features/polls.js';
+import { fileBubbleHTML, downloadFile } from '../features/files.js';
 
 let voiceGetResolve = null;
 
@@ -384,6 +385,8 @@ function buildMessageElement(msg, chat, peerId) {
             if (window.__waveCache && window.__waveCache[msg.audioId]) {
                 messageContent = messageContent.replace(/<span style="height:[^"]+"--i:(\d+)"><\/span>/g, (m, i) => `<span style="height:${window.__waveCache[msg.audioId][Number(i)] || 3}px;--i:${i}"></span>`);
             }
+        } else if (msg.file) {
+            messageContent = fileBubbleHTML(msg.file);
         } else if (msg.imgData) {
             messageContent = `<img src="${msg.imgData}" style="max-width: 250px; border-radius: 8px; cursor: pointer;" onclick="window.open('${msg.imgData}', '_blank')">`;
         }
@@ -557,6 +560,10 @@ function setupMessageContextMenu() {
 
         items.push({ label: 'Save to Vault', action: doSave });
         items.push({ label: isBookmarked(peerId, msg.id) ? 'Remove Bookmark' : 'Bookmark', action: doBookmark });
+
+        if (msg.file) {
+            items.push({ label: 'Download File', action: () => downloadFile(msg, chat) });
+        }
 
         if (!isVoiceMsg(msg)) {
             const text = payloadTextOf(msg);
@@ -987,6 +994,7 @@ export function setupMessageUI() {
             audioId: payloadObj.audioId,
             duration: payloadObj.duration,
             mime: payloadObj.mime,
+            file: payloadObj.file,
             timer: isVoiceMsg ? 0 : timerValue,
             type: 'sent', 
             isRead: chat.isGroup, 
@@ -1017,6 +1025,7 @@ export function setupMessageUI() {
             if (state.ws) state.ws.send(obfuscate(encPacket));
         }
     };
+    window.sendMessageData = sendMessageData;
 
     document.getElementById('btn-draw-send').onclick = () => {
         if (!state.currentActiveChat) return;

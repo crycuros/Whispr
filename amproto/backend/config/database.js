@@ -114,6 +114,33 @@ db.serialize(() => {
         name_enc TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
+    db.all(`PRAGMA table_info(users)`, (err, cols) => {
+        if (!err && cols && !cols.some(c => c.name === 'premium_until')) {
+            db.run(`ALTER TABLE users ADD COLUMN premium_until INTEGER DEFAULT 0`);
+        }
+    });
+    db.run(`CREATE TABLE IF NOT EXISTS files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        mime TEXT,
+        size INTEGER DEFAULT 0,
+        total_chunks INTEGER DEFAULT 0,
+        chunk_size INTEGER DEFAULT 0,
+        base_iv TEXT,
+        meta TEXT,
+        stored_path TEXT,
+        created_at INTEGER DEFAULT (strftime('%s','now'))
+    )`);
+    db.run(`CREATE TABLE IF NOT EXISTS premium_purchases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        plan TEXT NOT NULL,
+        amount REAL NOT NULL,
+        transaction_id TEXT UNIQUE,
+        receipt TEXT,
+        created_at INTEGER DEFAULT (strftime('%s','now'))
+    )`);
 
 });
 
