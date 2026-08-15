@@ -121,6 +121,18 @@ wss.on('connection', (ws) => {
                 case AMProto.CMD_SAVED_DELETE:
                     savedController.handleSavedDelete(ws, packet, clients, db);
                     break;
+                case AMProto.CMD_SAVED_MOVE:
+                    savedController.handleSavedMove(ws, packet, clients, db);
+                    break;
+                case AMProto.CMD_VAULT_CAT_CREATE:
+                    savedController.handleCatCreate(ws, packet, clients, db);
+                    break;
+                case AMProto.CMD_VAULT_CAT_LIST:
+                    savedController.handleCatList(ws, packet, clients, db);
+                    break;
+                case AMProto.CMD_VAULT_CAT_DELETE:
+                    savedController.handleCatDelete(ws, packet, clients, db);
+                    break;
                 case AMProto.CMD_VOICE_UPLOAD:
                     voiceController.handleVoiceUpload(ws, packet, db);
                     break;

@@ -5,6 +5,8 @@ const VAULT_SET_FLAG = 'whispr_vault_has_password';
 const SALT = new Uint8Array([11, 22, 33, 44, 55, 66, 77, 88, 99, 10, 11, 12, 13, 14, 15, 16]); // Fixed salt for now
 let vaultKey = null;
 let savedItems = [];
+let categories = [];
+let savedCatFilter = null;
 
 async function deriveKey(password) {
     const enc = new TextEncoder();
@@ -83,7 +85,7 @@ export function openVaultPanel() {
 }
 
 function sendSavedSave(msgType, contentEnc, metaEnc) {
-    const payload = JSON.stringify({ msgType, contentEnc, metaEnc });
+    const payload = JSON.stringify({ msgType, contentEnc, metaEnc, categoryId: savedCatFilter });
     if (payload.length > 65000) {
         alert('Message too large to save (limit reached).');
         return;
@@ -130,7 +132,7 @@ export async function handleSavedListOk(payload) {
                 const metaBytes = await decryptFromVault(metaB64);
                 meta = JSON.parse(new TextDecoder().decode(metaBytes));
             }
-            const entry = { id: item.id, meta, contentEnc: item.content_enc, createdAt: item.created_at };
+            const entry = { id: item.id, meta, contentEnc: item.content_enc, createdAt: item.created_at, categoryId: item.category_id || null };
             if (meta.type === 'text' || meta.type === 'link') {
                 const content = await loadSavedContent(entry);
                 entry.text = content.text || '';
@@ -142,6 +144,7 @@ export async function handleSavedListOk(payload) {
         }
     }
     renderSavedList();
+    loadCategories();
 }
 
 export async function loadSavedContent(item) {
@@ -164,9 +167,14 @@ function savedVoiceHTML(item) {
         <div class="saved-item" data-saved-id="${item.id}">
             <div class="saved-item-meta">
                 <span class="saved-badge">${escapeHtml(item.meta.type)}</span>
+                ${savedCategoryBadge(item)}
                 <span class="saved-source">${escapeHtml(item.meta.source || '')}</span>
                 <span class="saved-time">${formatSavedTime(item.createdAt)}</span>
+                <button type="button" class="saved-move" data-saved-id="${item.id}" title="Move to category">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                </button>
             </div>
+            ${savedMoveMenuHTML()}
             <div class="saved-voice">
                 <button class="play-btn saved-voice-play" data-saved-id="${item.id}">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
@@ -187,9 +195,14 @@ function savedTextHTML(item) {
         <div class="saved-item" data-saved-id="${item.id}">
             <div class="saved-item-meta">
                 <span class="saved-badge">${escapeHtml(item.meta.type)}</span>
+                ${savedCategoryBadge(item)}
                 <span class="saved-source">${escapeHtml(item.meta.source || '')}</span>
                 <span class="saved-time">${formatSavedTime(item.createdAt)}</span>
+                <button type="button" class="saved-move" data-saved-id="${item.id}" title="Move to category">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                </button>
             </div>
+            ${savedMoveMenuHTML()}
             <div class="saved-text"></div>
             <button class="saved-delete" data-saved-id="${item.id}">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -202,9 +215,14 @@ function savedFileHTML(item, name, sizeLabel) {
         <div class="saved-item" data-saved-id="${item.id}">
             <div class="saved-item-meta">
                 <span class="saved-badge">${escapeHtml(item.meta.type)}</span>
+                ${savedCategoryBadge(item)}
                 <span class="saved-source">${escapeHtml(item.meta.source || '')}</span>
                 <span class="saved-time">${formatSavedTime(item.createdAt)}</span>
+                <button type="button" class="saved-move" data-saved-id="${item.id}" title="Move to category">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                </button>
             </div>
+            ${savedMoveMenuHTML()}
             <div class="saved-file">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
                 <div class="saved-file-info">
@@ -227,6 +245,7 @@ function renderSavedList() {
     list.innerHTML = '';
 
     const visible = savedItems.filter(i => {
+        if (savedCatFilter !== null && i.categoryId !== savedCatFilter) return false;
         if (!q) return true;
         if ((i.meta.source || '').toLowerCase().includes(q)) return true;
         if ((i.meta.type || '').toLowerCase().includes(q)) return true;
@@ -269,6 +288,141 @@ function renderSavedList() {
 export function deleteSavedItem(id) {
     const packet = AMProto.buildPacket(AMProto.CMD_SAVED_DELETE, 0, state.myId, JSON.stringify({ id }));
     if (state.ws) state.ws.send(AMProto.obfuscate(packet));
+}
+
+export function loadCategories() {
+    if (!vaultKey || !state.myId) return;
+    const packet = AMProto.buildPacket(AMProto.CMD_VAULT_CAT_LIST, 0, state.myId, JSON.stringify({}));
+    if (state.ws) state.ws.send(AMProto.obfuscate(packet));
+}
+
+export async function handleCatListOk(payload) {
+    categories = [];
+    for (const c of payload.categories || []) {
+        try {
+            const bytes = await decryptFromVault(c.name_enc);
+            categories.push({ id: c.id, name: new TextDecoder().decode(bytes) });
+        } catch (e) {
+            console.error('category decrypt error:', e);
+        }
+    }
+    if (!categories.some(c => c.id === savedCatFilter)) savedCatFilter = null;
+    renderCategoryChips();
+    renderSavedList();
+}
+
+export async function createCategory(name) {
+    name = (name || '').trim();
+    if (!name || !vaultKey) return;
+    const nameEnc = await encryptForVault(new TextEncoder().encode(name.slice(0, 40)));
+    const packet = AMProto.buildPacket(AMProto.CMD_VAULT_CAT_CREATE, 0, state.myId, JSON.stringify({ nameEnc }));
+    if (state.ws) state.ws.send(AMProto.obfuscate(packet));
+}
+
+export function handleCatCreateOk(payload) {
+    loadCategories();
+}
+
+export function handleCatDeleteOk(payload) {
+    if (savedCatFilter === payload.id) savedCatFilter = null;
+    loadCategories();
+    loadSavedMessages();
+}
+
+export function deleteCategory(id) {
+    const packet = AMProto.buildPacket(AMProto.CMD_VAULT_CAT_DELETE, 0, state.myId, JSON.stringify({ id }));
+    if (state.ws) state.ws.send(AMProto.obfuscate(packet));
+}
+
+export function moveSavedItem(id, categoryId) {
+    const packet = AMProto.buildPacket(AMProto.CMD_SAVED_MOVE, 0, state.myId, JSON.stringify({ id, categoryId: categoryId || null }));
+    if (state.ws) state.ws.send(AMProto.obfuscate(packet));
+}
+
+export function handleSavedMoveOk(payload) {
+    const item = savedItems.find(i => i.id === payload.id);
+    if (item) item.categoryId = payload.categoryId || null;
+    renderSavedList();
+}
+
+function renderCategoryChips() {
+    const bar = document.getElementById('saved-categories');
+    if (!bar) return;
+    bar.innerHTML = '';
+
+    const mkChip = (id, label, active, removable) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'saved-cat-chip' + (active ? ' active' : '');
+        chip.dataset.catId = id;
+        const span = document.createElement('span');
+        span.textContent = label;
+        chip.appendChild(span);
+        if (removable) {
+            const x = document.createElement('span');
+            x.className = 'saved-cat-remove';
+            x.textContent = '\u00d7';
+            x.onclick = (e) => { e.stopPropagation(); deleteCategory(id); };
+            chip.appendChild(x);
+        }
+        chip.onclick = () => {
+            savedCatFilter = (id === '') ? null : id;
+            renderCategoryChips();
+            renderSavedList();
+        };
+        return chip;
+    };
+
+    bar.appendChild(mkChip('', 'All', savedCatFilter === null, false));
+    for (const c of categories) {
+        bar.appendChild(mkChip(c.id, c.name, savedCatFilter === c.id, true));
+    }
+
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'saved-cat-add';
+    add.textContent = '+';
+    add.title = 'New category';
+    add.onclick = () => {
+        const input = document.getElementById('new-cat-input');
+        if (input) {
+            input.style.display = 'block';
+            input.focus();
+        }
+    };
+    bar.appendChild(add);
+}
+
+function setupNewCategoryInput() {
+    const input = document.getElementById('new-cat-input');
+    if (!input) return;
+    const submit = () => {
+        const name = input.value.trim();
+        if (name) createCategory(name);
+        input.value = '';
+        input.style.display = 'none';
+    };
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); submit(); }
+        else if (e.key === 'Escape') { input.value = ''; input.style.display = 'none'; }
+    });
+    input.addEventListener('blur', () => {
+        if (input.value.trim()) submit();
+        else input.style.display = 'none';
+    });
+}
+
+function savedCategoryBadge(item) {
+    const cat = categories.find(c => c.id === item.categoryId);
+    return cat ? `<span class="saved-cat-badge">${escapeHtml(cat.name)}</span>` : '';
+}
+
+function savedMoveMenuHTML() {
+    let opts = '<button type="button" class="saved-move-item" data-cat-id="">No folder</button>';
+    for (const c of categories) {
+        opts += `<button type="button" class="saved-move-item" data-cat-id="${c.id}">${escapeHtml(c.name)}</button>`;
+    }
+    return `<div class="saved-move-menu">${opts}</div>`;
 }
 
 let savedAudioCtx = null;
@@ -348,6 +502,7 @@ function initVaultUI() {
         unlockedState.style.display = 'block';
         loadVaultFiles();
         loadSavedMessages();
+        loadCategories();
     };
 
     if (btnSet) {
@@ -357,7 +512,6 @@ function initVaultUI() {
             if (pwdInput.value !== pwdConfirm.value) { alert('Passwords do not match.'); return; }
             localStorage.setItem(VAULT_SET_FLAG, '1');
             vaultKey = await deriveKey(pwdInput.value);
-            refreshLockUI();
             doUnlock();
         };
     }
@@ -371,6 +525,7 @@ function initVaultUI() {
     }
 
     refreshLockUI();
+    setupNewCategoryInput();
 
     if (uploadInput) {
         uploadInput.onchange = async (e) => {
@@ -421,6 +576,27 @@ function initVaultUI() {
     }
 
     document.addEventListener('click', async (e) => {
+        const closeMoveMenus = () => {
+            document.querySelectorAll('.saved-item .saved-move-menu.show').forEach(m => m.classList.remove('show'));
+        };
+        const moveBtn = e.target.closest('.saved-move');
+        if (moveBtn) {
+            e.stopPropagation();
+            closeMoveMenus();
+            const menu = moveBtn.closest('.saved-item').querySelector('.saved-move-menu');
+            if (menu) menu.classList.add('show');
+            return;
+        }
+        const moveItem = e.target.closest('.saved-move-item');
+        if (moveItem) {
+            e.stopPropagation();
+            const itemEl = moveItem.closest('.saved-item');
+            moveSavedItem(Number(itemEl.dataset.savedId), moveItem.dataset.catId === '' ? null : Number(moveItem.dataset.catId));
+            closeMoveMenus();
+            return;
+        }
+        if (!e.target.closest('.saved-move-menu')) closeMoveMenus();
+
         const delBtn = e.target.closest('.saved-delete');
         if (delBtn) {
             deleteSavedItem(Number(delBtn.dataset.savedId));

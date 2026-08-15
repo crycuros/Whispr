@@ -75,6 +75,16 @@ class AMProto {
     static CMD_SAVED_DELETE = 0x4E;
     static CMD_SAVED_DELETE_OK = 0x4F;
     
+    // Vault Category Commands
+    static CMD_VAULT_CAT_CREATE = 0x50;
+    static CMD_VAULT_CAT_CREATE_OK = 0x51;
+    static CMD_VAULT_CAT_LIST = 0x52;
+    static CMD_VAULT_CAT_LIST_OK = 0x53;
+    static CMD_VAULT_CAT_DELETE = 0x54;
+    static CMD_VAULT_CAT_DELETE_OK = 0x55;
+    static CMD_SAVED_MOVE = 0x56;
+    static CMD_SAVED_MOVE_OK = 0x57;
+    
     // Voice Message Commands
     static CMD_VOICE_UPLOAD = 0x46;
     static CMD_VOICE_UPLOAD_OK = 0x47;

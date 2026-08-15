@@ -103,6 +103,17 @@ db.serialize(() => {
         meta_enc TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
+    db.all(`PRAGMA table_info(saved_messages)`, (err, cols) => {
+        if (!err && cols && !cols.some(c => c.name === 'category_id')) {
+            db.run(`ALTER TABLE saved_messages ADD COLUMN category_id INTEGER`);
+        }
+    });
+    db.run(`CREATE TABLE IF NOT EXISTS vault_categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        name_enc TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
 
 });
 

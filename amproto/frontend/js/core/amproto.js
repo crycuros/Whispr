@@ -65,6 +65,16 @@ export const CMD_SAVED_LIST_OK = 0x4D;
 export const CMD_SAVED_DELETE = 0x4E;
 export const CMD_SAVED_DELETE_OK = 0x4F;
 
+// Vault Category Commands
+export const CMD_VAULT_CAT_CREATE = 0x50;
+export const CMD_VAULT_CAT_CREATE_OK = 0x51;
+export const CMD_VAULT_CAT_LIST = 0x52;
+export const CMD_VAULT_CAT_LIST_OK = 0x53;
+export const CMD_VAULT_CAT_DELETE = 0x54;
+export const CMD_VAULT_CAT_DELETE_OK = 0x55;
+export const CMD_SAVED_MOVE = 0x56;
+export const CMD_SAVED_MOVE_OK = 0x57;
+
 // Voice Message Commands
 export const CMD_VOICE_UPLOAD = 0x46;
 export const CMD_VOICE_UPLOAD_OK = 0x47;

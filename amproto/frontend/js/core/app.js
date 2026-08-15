@@ -1,5 +1,5 @@
 import { state } from './store.js';
-import { CMD_LOGIN, CMD_REGISTER_OK, CMD_ERROR, CMD_LOGIN_OK, CMD_RESOLVE_OK, CMD_DH_INIT, CMD_DH_REPLY, CMD_USER_UPDATE_OK, CMD_ENC_MSG, CMD_TYPING, CMD_READ, CMD_GROUP_CREATE_OK, CMD_GROUP_INFO_OK, CMD_GROUP_MSG_RELAY, CMD_GROUP_READ, CMD_MSG_DELETE, CMD_PRESENCE, CMD_RTC_CALL, CMD_RTC_ANSWER, CMD_RTC_REJECT, CMD_RTC_END, CMD_RTC_ICE, CMD_VAULT_UPLOAD_OK, CMD_VAULT_LIST_OK, CMD_VAULT_DOWNLOAD_OK, CMD_LINK_PREVIEW_RES, CMD_REQ_SEND_OK, CMD_REQ_RECEIVED, CMD_REQ_ACCEPTED, CMD_REQ_DECLINED, CMD_REQ_LIST, CMD_REQ_LIST_OK, CMD_IDENTITY_KEY_RES, CMD_GROUP_KEY_GET_OK, CMD_VOICE_UPLOAD_OK, CMD_VOICE_GET_OK, CMD_SAVED_SAVE_OK, CMD_SAVED_LIST_OK, CMD_SAVED_DELETE_OK, buildPacket, parsePacket, obfuscate, deobfuscate, deriveSharedSecret, decryptPayload } from './amproto.js';
+import { CMD_LOGIN, CMD_REGISTER_OK, CMD_ERROR, CMD_LOGIN_OK, CMD_RESOLVE_OK, CMD_DH_INIT, CMD_DH_REPLY, CMD_USER_UPDATE_OK, CMD_ENC_MSG, CMD_TYPING, CMD_READ, CMD_GROUP_CREATE_OK, CMD_GROUP_INFO_OK, CMD_GROUP_MSG_RELAY, CMD_GROUP_READ, CMD_MSG_DELETE, CMD_PRESENCE, CMD_RTC_CALL, CMD_RTC_ANSWER, CMD_RTC_REJECT, CMD_RTC_END, CMD_RTC_ICE, CMD_VAULT_UPLOAD_OK, CMD_VAULT_LIST_OK, CMD_VAULT_DOWNLOAD_OK, CMD_LINK_PREVIEW_RES, CMD_REQ_SEND_OK, CMD_REQ_RECEIVED, CMD_REQ_ACCEPTED, CMD_REQ_DECLINED, CMD_REQ_LIST, CMD_REQ_LIST_OK, CMD_IDENTITY_KEY_RES, CMD_GROUP_KEY_GET_OK, CMD_VOICE_UPLOAD_OK, CMD_VOICE_GET_OK, CMD_SAVED_SAVE_OK, CMD_SAVED_LIST_OK, CMD_SAVED_DELETE_OK, CMD_VAULT_CAT_CREATE_OK, CMD_VAULT_CAT_LIST_OK, CMD_VAULT_CAT_DELETE_OK, CMD_SAVED_MOVE_OK, buildPacket, parsePacket, obfuscate, deobfuscate, deriveSharedSecret, decryptPayload } from './amproto.js';
 import { setupAuth, showError } from '../features/auth.js';
 import { setupPolls, castVote } from '../features/polls.js';
 import { loadBookmarks } from './bookmarks.js';
@@ -436,6 +436,18 @@ state.ws.onmessage = async (event) => {
         }
         else if (packet.command === CMD_SAVED_DELETE_OK) {
             Vault.handleSavedDeleteOk(JSON.parse(packet.payloadString));
+        }
+        else if (packet.command === CMD_VAULT_CAT_CREATE_OK) {
+            Vault.handleCatCreateOk(JSON.parse(packet.payloadString));
+        }
+        else if (packet.command === CMD_VAULT_CAT_LIST_OK) {
+            Vault.handleCatListOk(JSON.parse(packet.payloadString));
+        }
+        else if (packet.command === CMD_VAULT_CAT_DELETE_OK) {
+            Vault.handleCatDeleteOk(JSON.parse(packet.payloadString));
+        }
+        else if (packet.command === CMD_SAVED_MOVE_OK) {
+            Vault.handleSavedMoveOk(JSON.parse(packet.payloadString));
         }
         else if (packet.command === CMD_VOICE_UPLOAD_OK) {
             handleVoiceUploadOk(JSON.parse(packet.payloadString));
