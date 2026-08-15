@@ -123,7 +123,6 @@ input { font-family: inherit; }
     align-items: center;
     flex-shrink: 0;
     box-shadow: var(--shadow-lg);
-    overflow: hidden;
 }
 .nav-top, .nav-bottom {
     display: flex;
