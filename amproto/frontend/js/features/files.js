@@ -55,8 +55,8 @@ async function generateThumbnail(file) {
         const MAX_SIZE = 350;
 
         const processFrame = (videoOrImg) => {
-            let w = videoOrImg.videoWidth || videoOrImg.width || MAX_SIZE;
-            let h = videoOrImg.videoHeight || videoOrImg.height || MAX_SIZE;
+            let w = videoOrImg.videoWidth || videoOrImg.naturalWidth || MAX_SIZE;
+            let h = videoOrImg.videoHeight || videoOrImg.naturalHeight || MAX_SIZE;
             if (w > MAX_SIZE || h > MAX_SIZE) {
                 if (w > h) { h = Math.floor(h * (MAX_SIZE / w)); w = MAX_SIZE; }
                 else { w = Math.floor(w * (MAX_SIZE / h)); h = MAX_SIZE; }
