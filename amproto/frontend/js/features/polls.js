@@ -2,6 +2,7 @@ import { state } from '../core/store.js';
 import { buildPacket, obfuscate, CMD_GROUP_MSG, CMD_ENC_MSG } from '../core/amproto.js';
 import { renderMessages } from '../ui/messages.js';
 import { persistKeys } from '../core/app.js';
+import { encryptGroupText } from '../core/grouplock.js';
 
 export function setupPolls() {
     const pollModal = document.getElementById('poll-modal');
@@ -60,7 +61,8 @@ export function setupPolls() {
         await persistKeys();
         renderMessages(state.currentActiveChat);
 
-        const packet = buildPacket(CMD_GROUP_MSG, 0, state.myId, JSON.stringify({ groupId: chat.groupId, text: JSON.stringify(payloadObj) }));
+        const wireText = chat.groupKey ? await encryptGroupText(chat.groupKey, payloadObj) : JSON.stringify(payloadObj);
+        const packet = buildPacket(CMD_GROUP_MSG, 0, state.myId, JSON.stringify({ groupId: chat.groupId, text: wireText }));
         if (state.ws) state.ws.send(obfuscate(packet));
 
         pollModal.style.display = 'none';
@@ -101,7 +103,8 @@ export async function castVote(pollId, optionIndex) {
     await persistKeys();
     renderMessages(state.currentActiveChat);
 
-    const packet = buildPacket(CMD_GROUP_MSG, 0, state.myId, JSON.stringify({ groupId: chat.groupId, text: JSON.stringify(payloadObj) }));
+    const wireText = chat.groupKey ? await encryptGroupText(chat.groupKey, payloadObj) : JSON.stringify(payloadObj);
+    const packet = buildPacket(CMD_GROUP_MSG, 0, state.myId, JSON.stringify({ groupId: chat.groupId, text: wireText }));
     if (state.ws) state.ws.send(obfuscate(packet));
 }
 

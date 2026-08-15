@@ -1,6 +1,7 @@
 import { state } from '../core/store.js';
 import { initials, avatarColor, escapeHtml, formatTime, formatListTime, dateLabel, whisperIconSVG, renderChatList } from './chatList.js';
 import { CMD_READ, CMD_TYPING, CMD_GROUP_MSG, CMD_GROUP_READ, CMD_ENC_MSG, CMD_DH_INIT, CMD_LINK_PREVIEW_REQ, buildPacket, obfuscate, encryptPayload } from '../core/amproto.js';
+import { encryptGroupText } from '../core/grouplock.js';
 import { persistKeys } from '../core/app.js';
 import { renderPoll } from '../features/polls.js';
 
@@ -436,7 +437,8 @@ export function setupMessageUI() {
             renderMessages(state.currentActiveChat);
             renderChatList();
             
-            const packet = buildPacket(CMD_GROUP_MSG, 0, state.myId, JSON.stringify({ groupId: chat.groupId, text: JSON.stringify(payloadObj) }));
+            const wireText = chat.groupKey ? await encryptGroupText(chat.groupKey, payloadObj) : JSON.stringify(payloadObj);
+            const packet = buildPacket(CMD_GROUP_MSG, 0, state.myId, JSON.stringify({ groupId: chat.groupId, text: wireText }));
             if (state.ws) state.ws.send(obfuscate(packet));
         } else {
             chat.messages.push(localMsg);

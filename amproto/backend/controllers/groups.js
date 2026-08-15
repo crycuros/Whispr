@@ -2,7 +2,7 @@ const AMProto = require('../core/amproto');
 const WebSocket = require('ws');
 
 exports.handleGroupCreate = (ws, packet, clients, db) => {
-    const { name, members, isFeed, description, avatarUrl } = JSON.parse(packet.payloadString);
+    const { name, members, isFeed, description, avatarUrl, groupKeys } = JSON.parse(packet.payloadString);
     db.run(`INSERT INTO groups (name, created_by, is_feed, description, avatar_url) VALUES (?, ?, ?, ?, ?)`, [name, packet.senderId, isFeed ? 1 : 0, description, avatarUrl], function(err) {
         if (err) {
             const errPacket = AMProto.buildPacket(AMProto.CMD_ERROR, packet.senderId, 0, JSON.stringify({ message: 'Group creation failed' }));
@@ -16,6 +16,21 @@ exports.handleGroupCreate = (ws, packet, clients, db) => {
                 stmt.run(groupId, userId, userId === packet.senderId ? 'admin' : 'member');
             });
             stmt.finalize(() => {
+                const keyEntries = Object.entries(groupKeys || {}).filter(([uid, keyData]) => {
+                    const uidN = parseInt(uid, 10);
+                    return allMembers.includes(uidN) && keyData && keyData.wrappedKey && keyData.iv;
+                });
+                const insertKeys = () => new Promise((resolve) => {
+                    if (keyEntries.length === 0) return resolve();
+                    let remaining = keyEntries.length;
+                    keyEntries.forEach(([uid, keyData]) => {
+                        db.run(`INSERT INTO group_keys (group_id, user_id, wrapped_key, iv) VALUES (?, ?, ?, ?)`, [groupId, parseInt(uid, 10), JSON.stringify(keyData.wrappedKey), JSON.stringify(keyData.iv)], (err) => {
+                            if (err) console.error('[Group] group_keys insert error:', err.message);
+                            if (--remaining === 0) resolve();
+                        });
+                    });
+                });
+                insertKeys().then(() => {
                 const placeholders = allMembers.map(() => '?').join(',');
                 db.all(`SELECT id, username FROM users WHERE id IN (${placeholders})`, allMembers, (e, users) => {
                     const memberNames = {};

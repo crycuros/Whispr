@@ -29,6 +29,13 @@ class AMProto {
     static CMD_GROUP_READ = 0x19;
     static CMD_MSG_DELETE = 0x1A;
     static CMD_PRESENCE = 0x1B;
+
+    // E2E group encryption
+    static CMD_IDENTITY_KEY = 0x1C;
+    static CMD_IDENTITY_KEY_REQ = 0x1D;
+    static CMD_IDENTITY_KEY_RES = 0x1E;
+    static CMD_GROUP_KEY_GET = 0x1F;
+    static CMD_GROUP_KEY_GET_OK = 0x12;
     
     // User commands
     static CMD_USER_UPDATE = 0x20;

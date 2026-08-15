@@ -11,6 +11,7 @@ const groupsController = require('./backend/controllers/groups');
 const usersController = require('./backend/controllers/users');
 const friendsController = require('./backend/controllers/friends');
 const vaultController = require('./backend/controllers/vault');
+const keysController = require('./backend/controllers/keys');
 const linkPreview = require('./backend/utils/linkPreview');
 
 const PORT = 3000;
@@ -87,6 +88,15 @@ wss.on('connection', (ws) => {
                     break;
                 case AMProto.CMD_GROUP_READ:
                     groupsController.handleGroupRead(ws, packet, db);
+                    break;
+                case AMProto.CMD_IDENTITY_KEY:
+                    keysController.handleIdentityKeyUpload(ws, packet, db);
+                    break;
+                case AMProto.CMD_IDENTITY_KEY_REQ:
+                    keysController.handleIdentityKeyReq(ws, packet, db);
+                    break;
+                case AMProto.CMD_GROUP_KEY_GET:
+                    keysController.handleGroupKeyGet(ws, packet, db);
                     break;
                 case AMProto.CMD_MSG_DELETE:
                     messagesController.handleMsgDelete(ws, packet, clients, db);

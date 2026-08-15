@@ -1,6 +1,7 @@
 import { state } from '../core/store.js';
 import { CMD_USER_UPDATE, CMD_GROUP_CREATE, buildPacket, obfuscate } from '../core/amproto.js';
 import { initials, avatarColor, escapeHtml } from './chatList.js';
+import { ensureIdentityKeyPair, generateGroupKey, wrapGroupKeyForMember, requestIdentityKeys } from '../core/grouplock.js';
 
 function updateCustomSelectUI(select) {
     if (!select) return;
@@ -235,11 +236,20 @@ export function setupModals() {
         document.getElementById('panel-space-step2').classList.add('active');
     };
 
-    document.getElementById('btn-create-space-fab').onclick = () => {
+    document.getElementById('btn-create-space-fab').onclick = async () => {
         const name = document.getElementById('space-name').value.trim() || 'New Space';
         const description = document.getElementById('space-desc').value.trim();
-        
-        const payload = { name, members: state.pendingSpaceMembers, description, avatarUrl: state.pendingSpaceAvatar };
+
+        const allMembers = Array.from(new Set([state.myId, ...(state.pendingSpaceMembers || [])]));
+        const groupKey = await generateGroupKey();
+        await ensureIdentityKeyPair();
+        const pubKeys = await requestIdentityKeys(allMembers);
+        const groupKeys = {};
+        for (const uid of allMembers) {
+            if (pubKeys[uid]) groupKeys[uid] = await wrapGroupKeyForMember(groupKey, pubKeys[uid]);
+        }
+
+        const payload = { name, members: state.pendingSpaceMembers, description, avatarUrl: state.pendingSpaceAvatar, groupKeys };
         const packet = buildPacket(CMD_GROUP_CREATE, 0, state.myId, JSON.stringify(payload));
         if (state.ws) state.ws.send(obfuscate(packet));
 
@@ -257,11 +267,17 @@ export function setupModals() {
         document.getElementById('panel-new-feed').classList.add('active');
     };
 
-    document.getElementById('btn-create-feed-fab').onclick = () => {
+    document.getElementById('btn-create-feed-fab').onclick = async () => {
         const name = document.getElementById('feed-name').value.trim() || 'New Feed';
         const description = document.getElementById('feed-desc').value.trim();
-        
-        const payload = { name, members: [], isFeed: true, description, avatarUrl: state.pendingFeedAvatar };
+
+        const groupKey = await generateGroupKey();
+        await ensureIdentityKeyPair();
+        const pubKeys = await requestIdentityKeys([state.myId]);
+        const groupKeys = {};
+        if (pubKeys[state.myId]) groupKeys[state.myId] = await wrapGroupKeyForMember(groupKey, pubKeys[state.myId]);
+
+        const payload = { name, members: [], isFeed: true, description, avatarUrl: state.pendingFeedAvatar, groupKeys };
         const packet = buildPacket(CMD_GROUP_CREATE, 0, state.myId, JSON.stringify(payload));
         if (state.ws) state.ws.send(obfuscate(packet));
 

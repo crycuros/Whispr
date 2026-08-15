@@ -19,5 +19,6 @@ export const state = {
     lastTypingSent: 0,
     typingTimeout: null,
     presence: new Map(), // userId -> { online, lastSeen }
+    identityKeyPair: null,
     ws: null
 };

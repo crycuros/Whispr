@@ -22,6 +22,11 @@ db.serialize(() => {
             db.run(`ALTER TABLE users ADD COLUMN last_seen INTEGER`);
         }
     });
+    db.all(`PRAGMA table_info(users)`, (err, cols) => {
+        if (!err && cols && !cols.some(c => c.name === 'identity_public_key')) {
+            db.run(`ALTER TABLE users ADD COLUMN identity_public_key TEXT`);
+        }
+    });
     db.run(`CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sender_id INTEGER,
@@ -56,6 +61,13 @@ db.serialize(() => {
         group_id INTEGER,
         user_id INTEGER,
         last_read INTEGER DEFAULT 0,
+        PRIMARY KEY (group_id, user_id)
+    )`);
+    db.run(`CREATE TABLE IF NOT EXISTS group_keys (
+        group_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        wrapped_key TEXT NOT NULL,
+        iv TEXT NOT NULL,
         PRIMARY KEY (group_id, user_id)
     )`);
     db.run(`CREATE TABLE IF NOT EXISTS friend_requests (

@@ -21,6 +21,13 @@ export const CMD_GROUP_INFO_OK = 0x16;
 export const CMD_GROUP_READ = 0x19;
 export const CMD_MSG_DELETE = 0x1A;
 export const CMD_PRESENCE = 0x1B;
+
+// E2E group encryption
+export const CMD_IDENTITY_KEY = 0x1C;
+export const CMD_IDENTITY_KEY_REQ = 0x1D;
+export const CMD_IDENTITY_KEY_RES = 0x1E;
+export const CMD_GROUP_KEY_GET = 0x1F;
+export const CMD_GROUP_KEY_GET_OK = 0x12;
 export const CMD_USER_UPDATE = 0x20;
 export const CMD_USER_UPDATE_OK = 0x21;
 

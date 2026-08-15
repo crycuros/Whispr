@@ -1,5 +1,5 @@
 import { state } from './store.js';
-import { CMD_LOGIN, CMD_REGISTER_OK, CMD_ERROR, CMD_LOGIN_OK, CMD_RESOLVE_OK, CMD_DH_INIT, CMD_DH_REPLY, CMD_USER_UPDATE_OK, CMD_ENC_MSG, CMD_TYPING, CMD_READ, CMD_GROUP_CREATE_OK, CMD_GROUP_INFO_OK, CMD_GROUP_MSG_RELAY, CMD_GROUP_READ, CMD_MSG_DELETE, CMD_PRESENCE, CMD_RTC_CALL, CMD_RTC_ANSWER, CMD_RTC_REJECT, CMD_RTC_END, CMD_RTC_ICE, CMD_VAULT_UPLOAD_OK, CMD_VAULT_LIST_OK, CMD_VAULT_DOWNLOAD_OK, CMD_LINK_PREVIEW_RES, CMD_REQ_SEND_OK, CMD_REQ_RECEIVED, CMD_REQ_ACCEPTED, CMD_REQ_DECLINED, CMD_REQ_LIST, CMD_REQ_LIST_OK, buildPacket, parsePacket, obfuscate, deobfuscate, deriveSharedSecret, decryptPayload } from './amproto.js';
+import { CMD_LOGIN, CMD_REGISTER_OK, CMD_ERROR, CMD_LOGIN_OK, CMD_RESOLVE_OK, CMD_DH_INIT, CMD_DH_REPLY, CMD_USER_UPDATE_OK, CMD_ENC_MSG, CMD_TYPING, CMD_READ, CMD_GROUP_CREATE_OK, CMD_GROUP_INFO_OK, CMD_GROUP_MSG_RELAY, CMD_GROUP_READ, CMD_MSG_DELETE, CMD_PRESENCE, CMD_RTC_CALL, CMD_RTC_ANSWER, CMD_RTC_REJECT, CMD_RTC_END, CMD_RTC_ICE, CMD_VAULT_UPLOAD_OK, CMD_VAULT_LIST_OK, CMD_VAULT_DOWNLOAD_OK, CMD_LINK_PREVIEW_RES, CMD_REQ_SEND_OK, CMD_REQ_RECEIVED, CMD_REQ_ACCEPTED, CMD_REQ_DECLINED, CMD_REQ_LIST, CMD_REQ_LIST_OK, CMD_IDENTITY_KEY_RES, CMD_GROUP_KEY_GET_OK, buildPacket, parsePacket, obfuscate, deobfuscate, deriveSharedSecret, decryptPayload } from './amproto.js';
 import { setupAuth, showError } from '../features/auth.js';
 import { setupPolls, castVote } from '../features/polls.js';
 import { renderChatList, getOrCreateChat, initials, avatarColor } from '../ui/chatList.js';
@@ -9,6 +9,7 @@ import { renderResolvedProfile, renderPendingRequests, addPendingRequest, remove
 import * as WebRTC from '../features/webrtc.js';
 import * as Vault from '../features/vault.js';
 import { initCallUI } from '../ui/callUI.js';
+import { ensureIdentityKeyPair, uploadIdentityKey, handleIdentityKeyRes, handleGroupKeyGetOk, ensureGroupKey, decryptGroupText } from './grouplock.js';
 
 if (localStorage.getItem('whispr_session')) {
     document.getElementById('auth-modal').style.display = 'none';
@@ -98,8 +99,17 @@ state.ws.onmessage = async (event) => {
                 setTimeout(() => { document.getElementById('app-container').style.opacity = '1'; }, 50);
             }, 500);
 
+            await ensureIdentityKeyPair();
+            await uploadIdentityKey();
+
             const reqListPacket = buildPacket(CMD_REQ_LIST, 0, state.myId, '{}');
             state.ws.send(obfuscate(reqListPacket));
+        }
+        else if (packet.command === CMD_IDENTITY_KEY_RES) {
+            handleIdentityKeyRes(JSON.parse(packet.payloadString));
+        }
+        else if (packet.command === CMD_GROUP_KEY_GET_OK) {
+            handleGroupKeyGetOk(JSON.parse(packet.payloadString));
         }
         else if (packet.command === CMD_RESOLVE_OK) {
             const data = JSON.parse(packet.payloadString);
@@ -280,6 +290,7 @@ state.ws.onmessage = async (event) => {
                 messages: state.chats.get(groupPeerId)?.messages || [],
                 unreadCount: state.chats.get(groupPeerId)?.unreadCount || 0
             });
+            ensureGroupKey(state.chats.get(groupPeerId)).catch(() => {});
             renderChatList();
         }
         else if (packet.command === CMD_GROUP_MSG_RELAY) {
@@ -296,7 +307,17 @@ state.ws.onmessage = async (event) => {
 
             let msgObj;
             try {
-                msgObj = JSON.parse(text);
+                const env = JSON.parse(text);
+                if (env && env.v === 1) {
+                    await ensureGroupKey(chat);
+                    if (chat.groupKey) {
+                        msgObj = await decryptGroupText(chat.groupKey, text);
+                    } else {
+                        msgObj = { text: '[encrypted]' };
+                    }
+                } else {
+                    msgObj = env;
+                }
             } catch(e) {
                 msgObj = { text: text };
             }
@@ -405,8 +426,7 @@ export async function persistKeys() {
     const exportableKeys = {};
     for (const [peerId, chat] of state.chats.entries()) {
         if (chat.isGroup) {
-            // Save group messages to localStorage (no crypto keys needed)
-            exportableKeys[peerId] = {
+            const groupExport = {
                 isGroup: true,
                 groupId: chat.groupId,
                 username: chat.username,
@@ -414,8 +434,14 @@ export async function persistKeys() {
                 creatorId: chat.creatorId,
                 members: chat.members,
                 memberNames: chat.memberNames || {},
-                messages: chat.messages
+                messages: chat.messages,
+                isEncrypted: chat.isEncrypted || false
             };
+            if (chat.groupKey) {
+                const gk = await crypto.subtle.exportKey("raw", chat.groupKey);
+                groupExport.groupKey = Array.from(new Uint8Array(gk));
+            }
+            exportableKeys[peerId] = groupExport;
             continue;
         }
         let exportable = { username: chat.username, isSecure: chat.isSecure, messages: chat.messages };
@@ -432,6 +458,14 @@ export async function persistKeys() {
             exportable.sharedSecret = Array.from(new Uint8Array(secret));
         }
         exportableKeys[peerId] = exportable;
+    }
+    if (state.identityKeyPair) {
+        const ipriv = await crypto.subtle.exportKey("pkcs8", state.identityKeyPair.privateKey);
+        const ipub = await crypto.subtle.exportKey("raw", state.identityKeyPair.publicKey);
+        exportableKeys.__identity = {
+            priv: Array.from(new Uint8Array(ipriv)),
+            pub: Array.from(new Uint8Array(ipub))
+        };
     }
     const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(state.myPasswordHash), { name: "PBKDF2" }, false, ["deriveBits", "deriveKey"]);
     const wrappingKey = await crypto.subtle.deriveKey(
@@ -464,6 +498,12 @@ export async function loadPersistedKeys() {
         const exportableKeys = JSON.parse(new TextDecoder().decode(decryptedStore));
 
         for (const [peerIdStr, dataObj] of Object.entries(exportableKeys)) {
+            if (peerIdStr === '__identity') {
+                const ipriv = await crypto.subtle.importKey("pkcs8", new Uint8Array(dataObj.priv), { name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey", "deriveBits"]);
+                const ipub = await crypto.subtle.importKey("raw", new Uint8Array(dataObj.pub), { name: "ECDH", namedCurve: "P-256" }, true, []);
+                state.identityKeyPair = { privateKey: ipriv, publicKey: ipub };
+                continue;
+            }
             if (dataObj.isGroup) {
                 // Restore group chat
                 const groupPeerId = peerIdStr;
@@ -487,6 +527,11 @@ export async function loadPersistedKeys() {
                         existing.messages = dataObj.messages || [];
                     }
                     if (dataObj.memberNames) existing.memberNames = dataObj.memberNames;
+                }
+                const restored = state.chats.get(groupPeerId);
+                if (dataObj.groupKey) {
+                    restored.groupKey = await crypto.subtle.importKey("raw", new Uint8Array(dataObj.groupKey), { name: "AES-GCM" }, true, ["encrypt", "decrypt"]);
+                    restored.isEncrypted = true;
                 }
                 continue;
             }
