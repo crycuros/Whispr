@@ -231,6 +231,7 @@ state.ws.onmessage = async (event) => {
                 text: msgObj.text || '', 
                 imgData: msgObj.imgData, 
                 isInvisible: msgObj.isInvisible, 
+                preview: msgObj.preview,
                 type: 'received', 
                 isRead: true, 
                 time: Date.now(), 
@@ -347,6 +348,7 @@ state.ws.onmessage = async (event) => {
                 if (msgObj.duration) existing.duration = msgObj.duration;
                 if (msgObj.mime) existing.mime = msgObj.mime;
                 if (msgObj.file) existing.file = msgObj.file;
+                if (msgObj.preview) existing.preview = msgObj.preview;
                 if (state.currentActiveChat === groupPeerId) {
                     const groupReadPacket = buildPacket(CMD_GROUP_READ, 0, state.myId, JSON.stringify({ groupId: chat.groupId, lastReadMsgId: messageId }));
                     state.ws.send(obfuscate(groupReadPacket));
@@ -369,6 +371,7 @@ state.ws.onmessage = async (event) => {
                 duration: msgObj.duration,
                 mime: msgObj.mime,
                 file: msgObj.file,
+                preview: msgObj.preview,
                 type: senderId === state.myId ? 'sent' : 'received',
                 isRead: true,
                 time: Date.now(),

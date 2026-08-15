@@ -391,8 +391,9 @@ function buildMessageElement(msg, chat, peerId) {
             messageContent = `<img src="${msg.imgData}" style="max-width: 250px; border-radius: 8px; cursor: pointer;" onclick="window.open('${msg.imgData}', '_blank')">`;
         }
         
-        if (payloadObj && payloadObj.preview && payloadObj.preview.title) {
-            const pv = payloadObj.preview;
+        const preview = (payloadObj && payloadObj.preview) || msg.preview;
+        if (state.myPreferences.embeds !== false && preview && preview.title) {
+            const pv = preview;
             messageContent += `
                 <div class="link-preview" style="margin-top: 8px; border-left: 3px solid #3b82f6; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; display: flex; flex-direction: column; gap: 4px; cursor: pointer;" onclick="window.open('${pv.url}', '_blank')">
                     ${pv.image ? `<img src="${pv.image}" style="max-width: 100%; border-radius: 4px; margin-bottom: 4px;">` : ''}
@@ -995,6 +996,7 @@ export function setupMessageUI() {
             duration: payloadObj.duration,
             mime: payloadObj.mime,
             file: payloadObj.file,
+            preview: payloadObj.preview,
             timer: isVoiceMsg ? 0 : timerValue,
             type: 'sent', 
             isRead: chat.isGroup, 
@@ -1075,7 +1077,7 @@ export function setupMessageUI() {
         
         // Extract URL
         const urlMatch = text.match(/(https?:\/\/[^\s]+)/i);
-        if (urlMatch) {
+        if (urlMatch && state.myPreferences.embeds !== false) {
             const url = urlMatch[1];
             state.pendingPreviewCallback = (previewData) => {
                 const payloadObj = { text, isInvisible: isInvisibleMode };
