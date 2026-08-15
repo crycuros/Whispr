@@ -1,9 +1,90 @@
 import { state } from '../core/store.js';
 import { initials, avatarColor, escapeHtml, formatTime, formatListTime, dateLabel, whisperIconSVG, renderChatList } from './chatList.js';
-import { CMD_READ, CMD_TYPING, CMD_GROUP_MSG, CMD_GROUP_READ, CMD_ENC_MSG, CMD_DH_INIT, CMD_LINK_PREVIEW_REQ, buildPacket, obfuscate, encryptPayload } from '../core/amproto.js';
-import { encryptGroupText } from '../core/grouplock.js';
+import { CMD_READ, CMD_TYPING, CMD_GROUP_MSG, CMD_GROUP_READ, CMD_ENC_MSG, CMD_DH_INIT, CMD_LINK_PREVIEW_REQ, CMD_VOICE_UPLOAD, CMD_VOICE_GET, CMD_VOICE_UPLOAD_OK, CMD_VOICE_GET_OK, buildPacket, obfuscate, encryptPayload } from '../core/amproto.js';
+import { encryptGroupText, encryptBytes, decryptBytes } from '../core/grouplock.js';
+import { isBookmarked, toggleBookmark, loadBookmarks, getBookmarkedMessages, isBookmarkFilterActive, setBookmarkFilterActive } from '../core/bookmarks.js';
 import { persistKeys } from '../core/app.js';
 import { renderPoll } from '../features/polls.js';
+
+let voiceGetResolve = null;
+
+const bookmarkSVGOutline = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>';
+const bookmarkSVGFilled = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>';
+
+export function handleVoiceGetOk(data) {
+    if (voiceGetResolve) { const r = voiceGetResolve; voiceGetResolve = null; r(data); }
+}
+
+let voiceUploadResolve = null;
+
+export function handleVoiceUploadOk(data) {
+    if (voiceUploadResolve) { const r = voiceUploadResolve; voiceUploadResolve = null; r(data); }
+}
+
+function waitForVoiceUpload() {
+    return new Promise((resolve) => {
+        voiceUploadResolve = (data) => resolve(data || null);
+        setTimeout(() => { if (voiceUploadResolve) { voiceUploadResolve = null; resolve(null); } }, 8000);
+    });
+}
+
+function formatRecTime(seconds) {
+    const s = Math.floor(seconds);
+    const m = Math.floor(s / 60);
+    return `${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+}
+
+function bytesToBase64(bytes) {
+    let bin = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+        bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    return btoa(bin);
+}
+
+function fetchVoiceClip(audioId) {
+    return new Promise((resolve) => {
+        voiceGetResolve = (data) => resolve(data || null);
+        const pkt = buildPacket(CMD_VOICE_GET, 0, state.myId, JSON.stringify({ id: audioId }));
+        if (state.ws) state.ws.send(obfuscate(pkt));
+        setTimeout(() => { if (voiceGetResolve) { voiceGetResolve = null; resolve(null); } }, 8000);
+    });
+}
+
+async function loadVoiceSrc(msg, chat) {
+    if (!window.__audioCache) window.__audioCache = {};
+    if (window.__audioCache[msg.audioId]) return window.__audioCache[msg.audioId];
+    try {
+        const data = await fetchVoiceClip(msg.audioId);
+        if (!data || !data.encData) return null;
+        const env = JSON.parse(atob(data.encData));
+        const key = chat.isGroup ? chat.groupKey : chat.sharedSecretKey;
+        if (!key) return null;
+        const plain = await decryptBytes(key, env);
+        const blob = new Blob([plain], { type: data.mime || 'audio/webm' });
+        const url = URL.createObjectURL(blob);
+        window.__audioCache[msg.audioId] = url;
+        return url;
+    } catch (e) {
+        console.error('voice load error:', e);
+        return null;
+    }
+}
+
+function voicePlayerHTML(msg, chat) {
+    const dur = Math.ceil(msg.duration || 0);
+    return `
+        <div class="voice-bubble">
+            <button class="play-btn voice-play" data-audio-id="${escapeHtml(String(msg.audioId))}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            </button>
+            <div class="waveform">
+                ${Array.from({ length: 24 }, (_, i) => `<span style="height:${6 + Math.abs(Math.sin(i * 0.7)) * 14}px"></span>`).join('')}
+            </div>
+            <span class="duration">${dur}s</span>
+        </div>`;
+}
 
 export function openChat(peerId) {
     state.currentActiveChat = peerId;
@@ -165,9 +246,10 @@ export function renderMessages(peerId) {
     
     container.innerHTML = '';
     const fragment = document.createDocumentFragment();
+    const messages = isBookmarkFilterActive() ? getBookmarkedMessages(chat) : chat.messages;
 
     let lastDay = null;
-    chat.messages.forEach(msg => {
+    messages.forEach(msg => {
         const day = msg.time ? new Date(msg.time).toDateString() : '';
         if (day && day !== lastDay) {
             const divider = document.createElement('div');
@@ -198,6 +280,7 @@ function buildMessageElement(msg, chat, peerId) {
         const payloadObj = (msg.text && msg.text.startsWith('{')) ? (() => { try { return JSON.parse(msg.text); } catch(e) { return null; } })() : null;
         const isPoll = payloadObj && payloadObj.type === 'poll';
         const isVote = payloadObj && payloadObj.type === 'vote';
+        const isVoice = (payloadObj && payloadObj.type === 'voice') || !!msg.audioId;
 
         if (isVote) return null;
 
@@ -205,6 +288,8 @@ function buildMessageElement(msg, chat, peerId) {
         let messageContent = escapeHtml(displayString);
         if (isPoll) {
             messageContent = renderPoll(msg, chat, payloadObj);
+        } else if (isVoice) {
+            messageContent = voicePlayerHTML({ ...msg, ...payloadObj }, chat);
         } else if (msg.imgData) {
             messageContent = `<img src="${msg.imgData}" style="max-width: 250px; border-radius: 8px; cursor: pointer;" onclick="window.open('${msg.imgData}', '_blank')">`;
         }
@@ -286,6 +371,22 @@ function buildMessageElement(msg, chat, peerId) {
             }
         }
 
+        if (msg.id) {
+            const bookmarked = isBookmarked(peerId, msg.id);
+            const bmBtn = document.createElement('button');
+            bmBtn.className = 'bookmark-btn' + (bookmarked ? ' active' : '');
+            bmBtn.title = bookmarked ? 'Remove bookmark' : 'Bookmark message';
+            bmBtn.innerHTML = bookmarked ? bookmarkSVGFilled : bookmarkSVGOutline;
+            bmBtn.onclick = (e) => {
+                e.stopPropagation();
+                const nowBookmarked = toggleBookmark(peerId, msg.id);
+                bmBtn.classList.toggle('active', nowBookmarked);
+                bmBtn.title = nowBookmarked ? 'Remove bookmark' : 'Bookmark message';
+                bmBtn.innerHTML = nowBookmarked ? bookmarkSVGFilled : bookmarkSVGOutline;
+            };
+            wrapper.appendChild(bmBtn);
+        }
+
         return wrapper;
 }
 
@@ -303,12 +404,115 @@ export function showTypingIndicator(username) {
 }
 
 export function setupMessageUI() {
+    loadBookmarks();
     let isInvisibleMode = false;
     const btnInvisible = document.getElementById('btn-invisible-ink');
     if (btnInvisible) {
         btnInvisible.onclick = () => {
             isInvisibleMode = !isInvisibleMode;
             btnInvisible.style.color = isInvisibleMode ? 'var(--accent)' : '';
+        };
+    }
+
+    const btnMic = document.getElementById('btn-mic');
+    let recorder = null;
+    let recordChunks = [];
+    let recordStart = 0;
+    let recTimerInterval = null;
+    const recTimer = document.getElementById('rec-timer');
+
+    const stopRecording = () => {
+        if (recorder && recorder.state === 'recording') recorder.stop();
+    };
+
+    if (btnMic) {
+        btnMic.onclick = async () => {
+            if (recorder && recorder.state === 'recording') {
+                stopRecording();
+                return;
+            }
+            const chat = state.chats.get(state.currentActiveChat);
+            const key = chat ? (chat.isGroup ? chat.groupKey : chat.sharedSecretKey) : null;
+            if (!chat || !key) {
+                alert('Start a secure chat to send voice messages.');
+                return;
+            }
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert('Voice recording not supported on this device.');
+                return;
+            }
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch (e) {
+                alert('Microphone access denied.');
+                return;
+            }
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                ? 'audio/webm;codecs=opus'
+                : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '');
+            recorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 16000 } : { audioBitsPerSecond: 16000 });
+            recordChunks = [];
+            recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) recordChunks.push(e.data); };
+            recorder.onstop = () => {
+                stream.getTracks().forEach(t => t.stop());
+                if (recTimerInterval) clearInterval(recTimerInterval);
+                recTimerInterval = null;
+                if (btnMic) btnMic.classList.remove('recording');
+                if (recTimer) recTimer.style.display = 'none';
+                const duration = (Date.now() - recordStart) / 1000;
+                const blob = new Blob(recordChunks, { type: mimeType || 'audio/webm' });
+                recordChunks = [];
+                recorder = null;
+                if (blob.size === 0) return;
+                uploadVoiceMessage(blob, Math.round(duration), chat);
+            };
+            recordStart = Date.now();
+            if (btnMic) btnMic.classList.add('recording');
+            if (recTimer) {
+                recTimer.style.display = 'flex';
+                const tick = () => { recTimer.innerText = formatRecTime((Date.now() - recordStart) / 1000); };
+                tick();
+                recTimerInterval = setInterval(tick, 500);
+            }
+            recorder.start();
+            setTimeout(() => {
+                if (recorder && recorder.state === 'recording') stopRecording();
+            }, 15000);
+        };
+    }
+
+    document.addEventListener('click', async (e) => {
+        const playBtn = e.target.closest('.voice-play');
+        if (!playBtn) return;
+        const audioId = playBtn.dataset.audioId;
+        if (!audioId || !state.currentActiveChat) return;
+        const chat = state.chats.get(state.currentActiveChat);
+        if (!chat) return;
+        const src = await loadVoiceSrc({ audioId }, chat);
+        if (!src) {
+            alert('Could not load voice message.');
+            return;
+        }
+        let audioEl = document.querySelector(`audio[data-audio-id="${audioId}"]`);
+        if (!audioEl) {
+            audioEl = new Audio(src);
+            audioEl.dataset.audioId = audioId;
+            document.querySelectorAll('audio[data-audio-id]').forEach(a => a.pause());
+            audioEl.play().catch(() => {});
+        } else {
+            if (audioEl.paused) audioEl.play().catch(() => {});
+            else audioEl.pause();
+        }
+    });
+
+    const btnBookmark = document.getElementById('btn-bookmark');
+    if (btnBookmark) {
+        btnBookmark.onclick = () => {
+            if (!state.currentActiveChat) return;
+            setBookmarkFilterActive(!isBookmarkFilterActive());
+            btnBookmark.classList.toggle('active', isBookmarkFilterActive());
+            renderMessages(state.currentActiveChat);
         };
     }
 
@@ -416,19 +620,23 @@ export function setupMessageUI() {
         const timerValue = timerSelect ? parseInt(timerSelect.value) : 0;
         const localId = Date.now().toString() + '-' + Math.floor(Math.random()*1000);
 
+        const isVoiceMsg = payloadObj.type === 'voice';
         const localMsg = { 
             id: localId,
-            text: payloadObj.text || '', 
+            text: isVoiceMsg ? JSON.stringify(payloadObj) : (payloadObj.text || ''), 
             imgData: payloadObj.imgData, 
             isInvisible: payloadObj.isInvisible,
-            timer: timerValue,
+            audioId: payloadObj.audioId,
+            duration: payloadObj.duration,
+            mime: payloadObj.mime,
+            timer: isVoiceMsg ? 0 : timerValue,
             type: 'sent', 
             isRead: chat.isGroup, 
             time: Date.now() 
         };
         
         payloadObj.id = localId;
-        payloadObj.timer = timerValue;
+        if (payloadObj.type !== 'voice') payloadObj.timer = timerValue;
         if (chat.isGroup) {
             localMsg.senderId = state.myId;
             localMsg.senderUsername = state.myUsername;
@@ -458,6 +666,36 @@ export function setupMessageUI() {
         drawModal.style.display = 'none';
         sendMessageData({ imgData, isInvisible: isInvisibleMode });
     };
+
+    async function uploadVoiceMessage(blob, duration, chat) {
+        const buffer = await blob.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        if (bytes.length > 44000) {
+            alert('Voice message is too long to send.');
+            return;
+        }
+        const key = chat.isGroup ? chat.groupKey : chat.sharedSecretKey;
+        let env;
+        try {
+            env = await encryptBytes(key, bytes);
+        } catch (e) {
+            alert('Could not encrypt voice message.');
+            return;
+        }
+        const encData = bytesToBase64(new Uint8Array(new TextEncoder().encode(JSON.stringify(env))));
+        if (encData.length > 60000) {
+            alert('Voice message is too long to send.');
+            return;
+        }
+        const uploadPkt = buildPacket(CMD_VOICE_UPLOAD, 0, state.myId, JSON.stringify({ encData, mime: blob.type || 'audio/webm', duration }));
+        if (state.ws) state.ws.send(obfuscate(uploadPkt));
+        const result = await waitForVoiceUpload();
+        if (!result || !result.id) {
+            alert('Voice upload failed.');
+            return;
+        }
+        await sendMessageData({ type: 'voice', audioId: result.id, duration, mime: blob.type || 'audio/webm', text: 'Voice message' });
+    }
 
     document.getElementById('btn-send').onclick = async () => {
         if (!state.currentActiveChat) return;

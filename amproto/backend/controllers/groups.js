@@ -53,6 +53,7 @@ exports.handleGroupCreate = (ws, packet, clients, db) => {
                     exports.syncGroupPresence(db, allMembers, clients);
                 });
             });
+        });
         }
     });
 };

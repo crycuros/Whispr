@@ -57,6 +57,12 @@ export const CMD_VAULT_LIST_OK = 0x43;
 export const CMD_VAULT_DOWNLOAD = 0x44;
 export const CMD_VAULT_DOWNLOAD_OK = 0x45;
 
+// Voice Message Commands
+export const CMD_VOICE_UPLOAD = 0x46;
+export const CMD_VOICE_UPLOAD_OK = 0x47;
+export const CMD_VOICE_GET = 0x48;
+export const CMD_VOICE_GET_OK = 0x49;
+
 export const CMD_LINK_PREVIEW_REQ = 0x60;
 export const CMD_LINK_PREVIEW_RES = 0x61;
 

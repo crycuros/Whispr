@@ -37,7 +37,7 @@ export function dateLabel(ts) {
     if (d.toDateString() === new Date(now.getTime() - 86400000).toDateString()) return 'Yesterday';
     return d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
 }
-export const whisperIconSVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M6 9 C 8 11, 8 13, 6 15" /><path d="M11 5 C 15 9, 15 15, 11 19" /><path d="M16 1 C 22 7, 22 17, 16 23" /></svg>`;
+export const whisperIconSVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9 C 8 11, 8 13, 6 15" /><path d="M11 5 C 15 9, 15 15, 11 19" /><path d="M16 1 C 22 7, 22 17, 16 23" /></svg>`;
 
 export function getOrCreateChat(peerId) {
     if (!state.chats.has(peerId)) {
@@ -79,7 +79,17 @@ export function renderChatList() {
         let preview;
         if (chat.typing && chat.typingUser) preview = `<span class="typing-text">${escapeHtml(chat.typingUser)} is typing...</span>`;
         else if (chat.typing) preview = `<span class="typing-text">typing...</span>`;
-        else if (last) preview = `${chat.isGroup && last.senderUsername ? escapeHtml(last.senderUsername) + ': ' : ''}${escapeHtml(last.text)}`;
+        else if (last) {
+            let lastText = last.text || '';
+            if (lastText.startsWith('{')) {
+                try {
+                    const p = JSON.parse(lastText);
+                    if (p && p.type === 'voice') lastText = 'Voice message';
+                    else if (p && p.text !== undefined) lastText = p.text;
+                } catch(e) {}
+            }
+            preview = `${chat.isGroup && last.senderUsername ? escapeHtml(last.senderUsername) + ': ' : ''}${escapeHtml(lastText)}`;
+        }
         else if (chat.isGroup) preview = 'Space created';
         else if (chat.isSecure) preview = 'Encrypted chat';
         else preview = 'Connecting...';

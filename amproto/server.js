@@ -12,6 +12,7 @@ const usersController = require('./backend/controllers/users');
 const friendsController = require('./backend/controllers/friends');
 const vaultController = require('./backend/controllers/vault');
 const keysController = require('./backend/controllers/keys');
+const voiceController = require('./backend/controllers/voice');
 const linkPreview = require('./backend/utils/linkPreview');
 
 const PORT = 3000;
@@ -109,6 +110,12 @@ wss.on('connection', (ws) => {
                     break;
                 case AMProto.CMD_VAULT_DOWNLOAD:
                     vaultController.handleVaultDownload(ws, packet, clients, db);
+                    break;
+                case AMProto.CMD_VOICE_UPLOAD:
+                    voiceController.handleVoiceUpload(ws, packet, db);
+                    break;
+                case AMProto.CMD_VOICE_GET:
+                    voiceController.handleVoiceGet(ws, packet, db);
                     break;
                 case AMProto.CMD_LINK_PREVIEW_REQ:
                     const { url } = JSON.parse(packet.payloadString);

@@ -1,9 +1,10 @@
 import { state } from './store.js';
-import { CMD_LOGIN, CMD_REGISTER_OK, CMD_ERROR, CMD_LOGIN_OK, CMD_RESOLVE_OK, CMD_DH_INIT, CMD_DH_REPLY, CMD_USER_UPDATE_OK, CMD_ENC_MSG, CMD_TYPING, CMD_READ, CMD_GROUP_CREATE_OK, CMD_GROUP_INFO_OK, CMD_GROUP_MSG_RELAY, CMD_GROUP_READ, CMD_MSG_DELETE, CMD_PRESENCE, CMD_RTC_CALL, CMD_RTC_ANSWER, CMD_RTC_REJECT, CMD_RTC_END, CMD_RTC_ICE, CMD_VAULT_UPLOAD_OK, CMD_VAULT_LIST_OK, CMD_VAULT_DOWNLOAD_OK, CMD_LINK_PREVIEW_RES, CMD_REQ_SEND_OK, CMD_REQ_RECEIVED, CMD_REQ_ACCEPTED, CMD_REQ_DECLINED, CMD_REQ_LIST, CMD_REQ_LIST_OK, CMD_IDENTITY_KEY_RES, CMD_GROUP_KEY_GET_OK, buildPacket, parsePacket, obfuscate, deobfuscate, deriveSharedSecret, decryptPayload } from './amproto.js';
+import { CMD_LOGIN, CMD_REGISTER_OK, CMD_ERROR, CMD_LOGIN_OK, CMD_RESOLVE_OK, CMD_DH_INIT, CMD_DH_REPLY, CMD_USER_UPDATE_OK, CMD_ENC_MSG, CMD_TYPING, CMD_READ, CMD_GROUP_CREATE_OK, CMD_GROUP_INFO_OK, CMD_GROUP_MSG_RELAY, CMD_GROUP_READ, CMD_MSG_DELETE, CMD_PRESENCE, CMD_RTC_CALL, CMD_RTC_ANSWER, CMD_RTC_REJECT, CMD_RTC_END, CMD_RTC_ICE, CMD_VAULT_UPLOAD_OK, CMD_VAULT_LIST_OK, CMD_VAULT_DOWNLOAD_OK, CMD_LINK_PREVIEW_RES, CMD_REQ_SEND_OK, CMD_REQ_RECEIVED, CMD_REQ_ACCEPTED, CMD_REQ_DECLINED, CMD_REQ_LIST, CMD_REQ_LIST_OK, CMD_IDENTITY_KEY_RES, CMD_GROUP_KEY_GET_OK, CMD_VOICE_UPLOAD_OK, CMD_VOICE_GET_OK, buildPacket, parsePacket, obfuscate, deobfuscate, deriveSharedSecret, decryptPayload } from './amproto.js';
 import { setupAuth, showError } from '../features/auth.js';
 import { setupPolls, castVote } from '../features/polls.js';
+import { loadBookmarks } from './bookmarks.js';
 import { renderChatList, getOrCreateChat, initials, avatarColor } from '../ui/chatList.js';
-import { renderMessages, appendMessage, openChat, updateChatStatus, updateGroupStatus, showTypingIndicator, setupMessageUI } from '../ui/messages.js';
+import { renderMessages, appendMessage, openChat, updateChatStatus, updateGroupStatus, showTypingIndicator, setupMessageUI, handleVoiceUploadOk, handleVoiceGetOk } from '../ui/messages.js';
 import { setupModals, applyPreferences, applyThemeColor } from '../ui/modals.js';
 import { renderResolvedProfile, renderPendingRequests, addPendingRequest, removePendingRequest, setupFriendsUI } from '../ui/friends.js';
 import * as WebRTC from '../features/webrtc.js';
@@ -39,6 +40,7 @@ state.ws.onopen = () => {
     if (session) {
         const { user, token } = JSON.parse(session);
         state.myUsername = user;
+        loadBookmarks();
         loadPersistedKeys().then(() => {
             const payload = JSON.stringify({ username: user, sessionToken: token });
             const packet = buildPacket(CMD_LOGIN, 0, 0, payload);
@@ -224,7 +226,10 @@ state.ws.onmessage = async (event) => {
                 isInvisible: msgObj.isInvisible, 
                 type: 'received', 
                 isRead: true, 
-                time: Date.now() 
+                time: Date.now(), 
+                audioId: msgObj.audioId, 
+                duration: msgObj.duration, 
+                mime: msgObj.mime 
             });
             chat.typing = false;
             await persistKeys();
@@ -327,9 +332,12 @@ state.ws.onmessage = async (event) => {
             if (existing) {
                 existing.messageId = messageId;
                 if (msgObj.timer !== undefined) existing.timer = msgObj.timer;
-                if (msgObj.text) existing.text = msgObj.text;
+                if (msgObj.text && !msgObj.audioId) existing.text = msgObj.text;
                 if (msgObj.imgData) existing.imgData = msgObj.imgData;
                 if (msgObj.isInvisible !== undefined) existing.isInvisible = msgObj.isInvisible;
+                if (msgObj.audioId) existing.audioId = msgObj.audioId;
+                if (msgObj.duration) existing.duration = msgObj.duration;
+                if (msgObj.mime) existing.mime = msgObj.mime;
                 if (state.currentActiveChat === groupPeerId) {
                     const groupReadPacket = buildPacket(CMD_GROUP_READ, 0, state.myId, JSON.stringify({ groupId: chat.groupId, lastReadMsgId: messageId }));
                     state.ws.send(obfuscate(groupReadPacket));
@@ -348,6 +356,9 @@ state.ws.onmessage = async (event) => {
                 text: msgObj.text || '',
                 imgData: msgObj.imgData,
                 isInvisible: msgObj.isInvisible,
+                audioId: msgObj.audioId,
+                duration: msgObj.duration,
+                mime: msgObj.mime,
                 type: senderId === state.myId ? 'sent' : 'received',
                 isRead: true,
                 time: Date.now(),
@@ -416,6 +427,12 @@ state.ws.onmessage = async (event) => {
         }
         else if (packet.command === CMD_VAULT_DOWNLOAD_OK) {
             Vault.handleVaultDownloadOk(JSON.parse(packet.payloadString));
+        }
+        else if (packet.command === CMD_VOICE_UPLOAD_OK) {
+            handleVoiceUploadOk(JSON.parse(packet.payloadString));
+        }
+        else if (packet.command === CMD_VOICE_GET_OK) {
+            handleVoiceGetOk(JSON.parse(packet.payloadString));
         }
     } catch (err) {
         console.error("Protocol Error:", err);

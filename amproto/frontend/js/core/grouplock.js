@@ -64,6 +64,8 @@ async function decryptBytes(secretKey, env) {
     return new Uint8Array(dec);
 }
 
+export { encryptBytes, decryptBytes };
+
 export async function wrapGroupKeyForMember(groupKey, memberPublicKeyBytes) {
     const peerKey = await crypto.subtle.importKey("raw", new Uint8Array(memberPublicKeyBytes), { name: "ECDH", namedCurve: "P-256" }, true, []);
     const secret = await deriveSharedSecret(state.identityKeyPair, peerKey);

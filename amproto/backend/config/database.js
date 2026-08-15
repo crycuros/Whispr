@@ -87,6 +87,14 @@ db.serialize(() => {
         blob_data BLOB,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
+    db.run(`CREATE TABLE IF NOT EXISTS voice_clips (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL,
+        mime TEXT,
+        duration REAL DEFAULT 0,
+        clip_data BLOB,
+        created_at INTEGER DEFAULT (strftime('%s','now'))
+    )`);
 
 });
 
