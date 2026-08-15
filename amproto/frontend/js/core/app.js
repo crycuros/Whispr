@@ -708,3 +708,21 @@ setupModals();
 initCallUI();
 setupPremium();
 setupFileHandlers();
+
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && state.currentActiveChat) {
+        const chat = state.chats.get(state.currentActiveChat);
+        if (chat && chat.unreadCount > 0) {
+            if (chat.isGroup) {
+                const lastMsg = chat.messages[chat.messages.length - 1];
+                const readPacket = buildPacket(CMD_GROUP_READ, 0, state.myId, JSON.stringify({ groupId: chat.groupId, lastReadMsgId: lastMsg ? (lastMsg.messageId || 0) : 0 }));
+                if (state.ws) state.ws.send(obfuscate(readPacket));
+            } else {
+                const readPacket = buildPacket(CMD_READ, state.currentActiveChat, state.myId, "");
+                if (state.ws) state.ws.send(obfuscate(readPacket));
+            }
+            chat.unreadCount = 0;
+            import('./ui/chatList.js').then(m => m.renderChatList());
+        }
+    }
+});
