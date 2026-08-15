@@ -1078,7 +1078,7 @@ export function setupMessageUI() {
         // Extract URL
         const urlMatch = text.match(/(https?:\/\/[^\s]+)/i);
         if (urlMatch && state.myPreferences.embeds !== false) {
-            const url = urlMatch[1];
+            const url = urlMatch[1].replace(/[.,!?;:]+$/, '');
             state.pendingPreviewCallback = (previewData) => {
                 const payloadObj = { text, isInvisible: isInvisibleMode };
                 if (previewData) payloadObj.preview = previewData;
