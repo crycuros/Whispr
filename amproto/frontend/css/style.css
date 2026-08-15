@@ -2674,3 +2674,33 @@ video {
     font-size: 11px;
     opacity: 0.8;
 }
+
+/* -- Mensayo Plus coming soon -- */
+.premium-status.coming-soon {
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+.premium-coming-soon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+    padding: 24px 12px 28px;
+    color: #facc15;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    margin-bottom: 8px;
+}
+.coming-soon-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.coming-soon-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    max-width: 300px;
+    line-height: 1.5;
+}

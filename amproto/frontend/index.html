@@ -597,30 +597,37 @@
                 </button>
             </div>
             <p class="premium-status" id="premium-status"></p>
-            <div class="premium-plans">
-                <button type="button" class="premium-plan selected" data-plan="monthly">
-                    <span class="plan-name">Monthly</span>
-                    <span class="plan-price">&#8369;149<span class="plan-period">/month</span></span>
-                    <span class="plan-desc">4 GB file limit</span>
-                </button>
-                <button type="button" class="premium-plan" data-plan="yearly">
-                    <span class="plan-name">Yearly</span>
-                    <span class="plan-price">&#8369;1,499<span class="plan-period">/year</span></span>
-                    <span class="plan-desc">4 GB file limit</span>
-                </button>
+            <div class="premium-coming-soon" id="premium-coming-soon">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"></path></svg>
+                <p class="coming-soon-title">Coming Soon</p>
+                <span class="coming-soon-desc">We're working on Mensayo Plus &mdash; bigger file sharing limits and exclusive perks are on the way. Stay tuned!</span>
             </div>
-            <div class="premium-checkout">
-                <input type="text" id="premium-cardholder" class="panel-input" placeholder="Cardholder Name" autocomplete="off">
-                <input type="text" id="premium-card-number" class="panel-input" placeholder="Card Number" inputmode="numeric" autocomplete="off">
-                <div style="display: flex; gap: 8px;">
-                    <input type="text" id="premium-expiry" class="panel-input" placeholder="MM/YY" autocomplete="off">
-                    <input type="text" id="premium-cvv" class="panel-input" placeholder="CVV" inputmode="numeric" autocomplete="off">
+            <div id="premium-purchase-area" style="display: none;">
+                <div class="premium-plans">
+                    <button type="button" class="premium-plan selected" data-plan="monthly">
+                        <span class="plan-name">Monthly</span>
+                        <span class="plan-price">&#8369;149<span class="plan-period">/month</span></span>
+                        <span class="plan-desc">4 GB file limit</span>
+                    </button>
+                    <button type="button" class="premium-plan" data-plan="yearly">
+                        <span class="plan-name">Yearly</span>
+                        <span class="plan-price">&#8369;1,499<span class="plan-period">/year</span></span>
+                        <span class="plan-desc">4 GB file limit</span>
+                    </button>
                 </div>
-                <p class="premium-msg" id="premium-msg"></p>
-            </div>
-            <div class="modal-actions" style="display: flex; justify-content: space-between; gap: 16px;">
-                <button class="btn-secondary" id="btn-premium-cancel" style="flex: 1;">Cancel</button>
-                <button class="btn-primary" id="btn-premium-pay" style="flex: 1;">Subscribe</button>
+                <div class="premium-checkout">
+                    <input type="text" id="premium-cardholder" class="panel-input" placeholder="Cardholder Name" autocomplete="off">
+                    <input type="text" id="premium-card-number" class="panel-input" placeholder="Card Number" inputmode="numeric" autocomplete="off">
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="premium-expiry" class="panel-input" placeholder="MM/YY" autocomplete="off">
+                        <input type="text" id="premium-cvv" class="panel-input" placeholder="CVV" inputmode="numeric" autocomplete="off">
+                    </div>
+                    <p class="premium-msg" id="premium-msg"></p>
+                </div>
+                <div class="modal-actions" style="display: flex; justify-content: space-between; gap: 16px;">
+                    <button class="btn-secondary" id="btn-premium-cancel" style="flex: 1;">Cancel</button>
+                    <button class="btn-primary" id="btn-premium-pay" style="flex: 1;">Subscribe</button>
+                </div>
             </div>
         </div>
     </div>

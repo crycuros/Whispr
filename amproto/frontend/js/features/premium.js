@@ -41,20 +41,13 @@ export function authHeaders() {
 function updatePremiumUI() {
     const btn = document.getElementById('btn-premium');
     if (btn) {
-        btn.classList.toggle('premium', isPremium());
-        btn.title = isPremium()
-            ? `Mensayo Plus active until ${formatPremiumDate(state.premiumUntil)}`
-            : 'Upgrade to Mensayo Plus';
+        btn.classList.remove('premium');
+        btn.title = 'Mensayo Plus (coming soon)';
     }
     const status = document.getElementById('premium-status');
     if (status) {
-        if (isPremium()) {
-            status.textContent = `You're on Mensayo Plus. Premium until ${formatPremiumDate(state.premiumUntil)}. 4 GB file limit.`;
-            status.className = 'premium-status active';
-        } else {
-            status.textContent = "You're on the Free plan. 2 GB file limit per file.";
-            status.className = 'premium-status';
-        }
+        status.textContent = "Mensayo Plus is coming soon! We're working on bigger file sharing limits and exclusive perks for you.";
+        status.className = 'premium-status coming-soon';
     }
 }
 
