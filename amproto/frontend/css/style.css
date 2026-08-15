@@ -2555,17 +2555,41 @@ video {
 }
 
 /* Invisible Ink */
+.bubble.invisible-ink {
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+}
 .bubble.invisible-ink .ink-wrapper {
     filter: blur(8px);
-    transition: filter 0.3s ease;
+    transition: filter 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
     user-select: none;
-    opacity: 0.8;
+    opacity: 0.7;
 }
+.bubble.invisible-ink::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+    background-size: 200% 100%;
+    animation: invisibleShimmer 2s infinite linear;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+}
+@keyframes invisibleShimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
 .bubble.invisible-ink:hover .ink-wrapper,
-.bubble.invisible-ink:active .ink-wrapper {
-    filter: none;
+.bubble.invisible-ink.revealed .ink-wrapper {
+    filter: blur(0px);
     user-select: auto;
     opacity: 1;
+}
+.bubble.invisible-ink:hover::after,
+.bubble.invisible-ink.revealed::after {
+    opacity: 0;
 }
 
 /* Typing indicator name label */

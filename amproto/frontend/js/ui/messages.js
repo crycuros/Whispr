@@ -1118,6 +1118,17 @@ export function setupMessageUI() {
         if (e.key === 'Enter') document.getElementById('btn-send').click();
     });
 
+    document.getElementById('messages').addEventListener('click', (e) => {
+        const bubble = e.target.closest('.bubble.invisible-ink');
+        if (bubble) {
+            bubble.classList.add('revealed');
+            if (bubble.hideTimeout) clearTimeout(bubble.hideTimeout);
+            bubble.hideTimeout = setTimeout(() => {
+                bubble.classList.remove('revealed');
+            }, 4000);
+        }
+    });
+
     document.getElementById('msg-input').addEventListener('input', () => {
         if (!state.currentActiveChat) return;
         const chat = state.chats.get(state.currentActiveChat);
