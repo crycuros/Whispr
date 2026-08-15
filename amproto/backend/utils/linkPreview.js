@@ -67,7 +67,20 @@ function fetchPreview(urlStr, redirects = 0) {
                         }
                     }
                 });
-                res.on('end', () => finish(parsePreview(data, urlStr)));
+                res.on('end', () => {
+                    const base = parsePreview(data, urlStr);
+                    const oembedHref = findOEmbed(data);
+                    let endpoint = null;
+                    if (oembedHref) {
+                        try { endpoint = new URL(oembedHref, urlStr).href; } catch (e) { endpoint = null; }
+                    } else if (isSpotify(urlStr)) {
+                        endpoint = 'https://open.spotify.com/oembed?url=' + encodeURIComponent(urlStr);
+                    }
+                    if (endpoint) {
+                        return fetchOEmbed(endpoint).then((o) => finish(mergePreview(base, o)));
+                    }
+                    finish(base);
+                });
                 res.on('error', () => finish(null));
             });
             req.on('timeout', () => {
@@ -85,6 +98,100 @@ function fetchPreview(urlStr, redirects = 0) {
             finish(null);
         }
     });
+}
+
+function fetchOEmbed(endpointUrl) {
+    return new Promise((resolve) => {
+        let parsedUrl;
+        try {
+            parsedUrl = new URL(endpointUrl);
+        } catch (e) {
+            return resolve(null);
+        }
+        if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+            return resolve(null);
+        }
+
+        const client = parsedUrl.protocol === 'https:' ? https : http;
+        let done = false;
+        const fin = (v) => {
+            if (!done) {
+                done = true;
+                resolve(v);
+            }
+        };
+
+        let req;
+        try {
+            req = client.get(endpointUrl, {
+                timeout: TIMEOUT_MS,
+                headers: { 'User-Agent': UA, 'Accept': 'application/json' }
+            }, (res) => {
+                if (res.statusCode !== 200) {
+                    res.resume();
+                    return fin(null);
+                }
+                let data = '';
+                res.on('data', (chunk) => {
+                    if (data.length < 300000) data += chunk;
+                });
+                res.on('end', () => {
+                    try {
+                        const j = JSON.parse(data);
+                        fin({
+                            title: j.title || null,
+                            image: j.thumbnail_url || j.thumbnailUrl || null,
+                            description: j.description || null
+                        });
+                    } catch (e) {
+                        fin(null);
+                    }
+                });
+                res.on('error', () => fin(null));
+            });
+            req.on('timeout', () => {
+                try { req.destroy(); } catch (e) {}
+                fin(null);
+            });
+            req.on('error', () => fin(null));
+        } catch (e) {
+            fin(null);
+        }
+    });
+}
+
+function resolveUrl(img, baseUrl) {
+    if (!img) return null;
+    try {
+        return new URL(img, baseUrl).href;
+    } catch (e) {
+        return img;
+    }
+}
+
+function mergePreview(base, oembed) {
+    if (!oembed) return base;
+    return {
+        title: oembed.title || base.title,
+        image: resolveUrl(oembed.image || base.image, base.url),
+        description: oembed.description || base.description,
+        url: base.url
+    };
+}
+
+function isSpotify(urlStr) {
+    try {
+        return new URL(urlStr).hostname === 'open.spotify.com';
+    } catch (e) {
+        return false;
+    }
+}
+
+function findOEmbed(html) {
+    const m = html.match(/<link[^>]*type="application\/json\+oembed"[^>]*>/i);
+    if (!m) return null;
+    const href = m[0].match(/href\s*=\s*["']([^"']+)["']/i);
+    return href ? href[1] : null;
 }
 
 function parsePreview(html, urlStr) {
@@ -117,7 +224,7 @@ function parsePreview(html, urlStr) {
     if (title) title = decodeHTMLEntities(title);
     if (description) description = decodeHTMLEntities(description);
 
-    return { title, image, description, url: urlStr };
+    return { title, image: resolveUrl(image, urlStr), description, url: urlStr };
 }
 
 function decodeHTMLEntities(text) {
