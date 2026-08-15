@@ -135,8 +135,27 @@ export function setupModals() {
     const savedColor = localStorage.getItem('whispr_accent_color');
     if (savedColor) applyThemeColor(savedColor);
 
+    const closeSidePanels = () => {
+        document.querySelectorAll('.side-panel').forEach(p => p.classList.remove('active'));
+        const vault = document.getElementById('panel-vault');
+        if (vault) vault.style.display = 'none';
+    };
+
+    const btnChats = document.getElementById('btn-chats');
+    if (btnChats) {
+        btnChats.addEventListener('click', () => {
+            closeSidePanels();
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            btnChats.classList.add('active');
+        });
+    }
+
     if (btnSettings) {
         btnSettings.addEventListener('click', () => {
+            closeSidePanels();
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            btnSettings.classList.add('active');
+
             document.getElementById('settings-display-name').value = state.myUsername;
             document.getElementById('settings-bio').value = state.myBio;
             
