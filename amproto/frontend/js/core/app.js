@@ -263,12 +263,21 @@ state.ws.onmessage = async (event) => {
             chat.typing = false;
             await persistKeys();
 
-            if (state.currentActiveChat === sender) {
+            if (state.currentActiveChat === sender && !document.hidden) {
                 const readPacket = buildPacket(CMD_READ, sender, state.myId, "");
                 state.ws.send(obfuscate(readPacket));
                 renderMessages(sender);
             } else {
-                chat.unreadCount++;
+                if (state.currentActiveChat !== sender) chat.unreadCount++;
+                
+                if (state.myPreferences && state.myPreferences.notifDesktop && window.Notification && Notification.permission === "granted") {
+                    let senderName = chat.displayName || `User ${sender}`;
+                    let notifText = msgObj.text || "Sent an attachment";
+                    if (msgObj.isInvisible) notifText = "Sent an invisible message";
+                    new Notification(`New message from ${senderName}`, { body: notifText });
+                }
+                
+                if (state.currentActiveChat === sender) renderMessages(sender);
             }
             renderChatList();
         }
