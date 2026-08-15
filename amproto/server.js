@@ -96,12 +96,21 @@ const wss = new WebSocket.Server({ server });
 wss.on('connection', (ws) => {
     console.log(`\n[Server] New WebSocket connection`);
     let myId = null;
+    ws.authenticatedId = null;
 
     ws.on('message', (rawData) => {
         try {
             // In Node.js 'ws' package, binary data arrives as a Buffer
             const cleanData = AMProto.deobfuscate(rawData);
             const packet = AMProto.parsePacket(cleanData);
+
+            if (packet.command !== AMProto.CMD_REGISTER && packet.command !== AMProto.CMD_LOGIN) {
+                if (ws.authenticatedId === null || packet.senderId !== ws.authenticatedId) {
+                    const errPacket = AMProto.buildPacket(AMProto.CMD_ERROR, packet.senderId, 0, JSON.stringify({ message: 'Not authenticated' }));
+                    ws.send(AMProto.obfuscate(errPacket));
+                    return;
+                }
+            }
             
             switch (packet.command) {
                 case AMProto.CMD_REGISTER:

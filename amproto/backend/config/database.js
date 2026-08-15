@@ -39,6 +39,11 @@ db.serialize(() => {
             db.run(`ALTER TABLE messages ADD COLUMN sent_at INTEGER DEFAULT 0`);
         }
     });
+    db.all(`PRAGMA table_info(messages)`, (err, cols) => {
+        if (!err && cols && !cols.some(c => c.name === 'client_msg_id')) {
+            db.run(`ALTER TABLE messages ADD COLUMN client_msg_id TEXT`);
+        }
+    });
     db.run(`CREATE TABLE IF NOT EXISTS groups (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,

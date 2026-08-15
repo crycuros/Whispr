@@ -2,6 +2,7 @@ import { state } from '../core/store.js';
 import * as AMProto from '../core/amproto.js';
 
 const VAULT_SET_FLAG = 'whispr_vault_has_password';
+const VAULT_CHECK_FLAG = 'whispr_vault_check';
 const SALT = new Uint8Array([11, 22, 33, 44, 55, 66, 77, 88, 99, 10, 11, 12, 13, 14, 15, 16]); // Fixed salt for now
 let vaultKey = null;
 let savedItems = [];
@@ -589,6 +590,19 @@ function initVaultUI() {
         if (p) p.save();
     };
 
+    const validateUnlock = async (password) => {
+        vaultKey = await deriveKey(password);
+        const checkB64 = localStorage.getItem(VAULT_CHECK_FLAG);
+        if (!checkB64) return true;
+        try {
+            await decryptData(b64ToBytes(checkB64).buffer);
+            return true;
+        } catch (e) {
+            vaultKey = null;
+            return false;
+        }
+    };
+
     if (btnSet) {
         btnSet.onclick = async () => {
             if (!pwdInput.value) return;
@@ -596,6 +610,8 @@ function initVaultUI() {
             if (pwdInput.value !== pwdConfirm.value) { alert('Passwords do not match.'); return; }
             localStorage.setItem(VAULT_SET_FLAG, '1');
             vaultKey = await deriveKey(pwdInput.value);
+            const check = await encryptData(new TextEncoder().encode('vault-check'));
+            localStorage.setItem(VAULT_CHECK_FLAG, bytesToB64(check));
             doUnlock();
         };
     }
@@ -603,7 +619,11 @@ function initVaultUI() {
     if (btnUnlock) {
         btnUnlock.onclick = async () => {
             if (!pwdInput.value) return;
-            vaultKey = await deriveKey(pwdInput.value);
+            const ok = await validateUnlock(pwdInput.value);
+            if (!ok) {
+                showVaultToast('Incorrect password');
+                return;
+            }
             doUnlock();
         };
     }

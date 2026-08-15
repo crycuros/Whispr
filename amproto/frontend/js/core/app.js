@@ -408,7 +408,7 @@ state.ws.onmessage = async (event) => {
             const chatPeer = payload.isGroup ? 'group_' + payload.groupId : sender;
             const chat = state.chats.get(chatPeer);
             if (chat) {
-                chat.messages = chat.messages.filter(m => m.id !== payload.msgId);
+                chat.messages = chat.messages.filter(m => m.id !== payload.msgId && m.messageId !== payload.msgId);
                 await persistKeys();
                 if (state.currentActiveChat === chatPeer) renderMessages(chatPeer);
             }
@@ -481,6 +481,40 @@ state.ws.onmessage = async (event) => {
     }
 };
 
+function bytesToB64(u8) {
+    let bin = '';
+    for (let i = 0; i < u8.length; i++) bin += String.fromCharCode(u8[i]);
+    return btoa(bin);
+}
+
+function getKeyStoreMaterial() {
+    const key = `whispr_keystore_secret_${state.myUsername}`;
+    let secret = localStorage.getItem(key);
+    if (!secret) {
+        secret = bytesToB64(crypto.getRandomValues(new Uint8Array(32)));
+        localStorage.setItem(key, secret);
+    }
+    return secret;
+}
+
+async function storeEncryptedKeys(exportableKeys) {
+    const material = getKeyStoreMaterial();
+    const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(material), { name: "PBKDF2" }, false, ["deriveBits", "deriveKey"]);
+    const wrappingKey = await crypto.subtle.deriveKey(
+        { "name": "PBKDF2", salt: new Uint8Array(16), iterations: 1000, hash: "SHA-256" },
+        keyMaterial, { "name": "AES-GCM", "length": 256 }, false, ["encrypt", "decrypt"]
+    );
+
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encryptedStore = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, wrappingKey, new TextEncoder().encode(JSON.stringify(exportableKeys)));
+
+    localStorage.setItem(`whispr_keys_${state.myUsername}`, JSON.stringify({
+        ver: 2,
+        iv: Array.from(iv),
+        data: Array.from(new Uint8Array(encryptedStore))
+    }));
+}
+
 export async function persistKeys() {
     const HISTORY_STORE_LIMIT = 150;
     const capMsgs = (arr) => Array.isArray(arr) ? arr.slice(-HISTORY_STORE_LIMIT) : arr;
@@ -529,19 +563,7 @@ export async function persistKeys() {
             pub: Array.from(new Uint8Array(ipub))
         };
     }
-    const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(state.myPasswordHash), { name: "PBKDF2" }, false, ["deriveBits", "deriveKey"]);
-    const wrappingKey = await crypto.subtle.deriveKey(
-        { "name": "PBKDF2", salt: new Uint8Array(16), iterations: 1000, hash: "SHA-256" },
-        keyMaterial, { "name": "AES-GCM", "length": 256 }, false, ["encrypt", "decrypt"]
-    );
-
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encryptedStore = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, wrappingKey, new TextEncoder().encode(JSON.stringify(exportableKeys)));
-
-    localStorage.setItem(`whispr_keys_${state.myUsername}`, JSON.stringify({
-        iv: Array.from(iv),
-        data: Array.from(new Uint8Array(encryptedStore))
-    }));
+    await storeEncryptedKeys(exportableKeys);
 }
 
 export async function loadPersistedKeys() {
@@ -550,13 +572,22 @@ export async function loadPersistedKeys() {
 
     try {
         const { iv, data } = JSON.parse(stored);
-        const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(state.myPasswordHash), { name: "PBKDF2" }, false, ["deriveBits", "deriveKey"]);
-        const wrappingKey = await crypto.subtle.deriveKey(
-            { "name": "PBKDF2", salt: new Uint8Array(16), iterations: 1000, hash: "SHA-256" },
-            keyMaterial, { "name": "AES-GCM", "length": 256 }, false, ["encrypt", "decrypt"]
-        );
+        const decryptWithMaterial = async (keyMaterialStr) => {
+            const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(keyMaterialStr), { name: "PBKDF2" }, false, ["deriveBits", "deriveKey"]);
+            const wrappingKey = await crypto.subtle.deriveKey(
+                { "name": "PBKDF2", salt: new Uint8Array(16), iterations: 1000, hash: "SHA-256" },
+                keyMaterial, { "name": "AES-GCM", "length": 256 }, false, ["encrypt", "decrypt"]
+            );
+            return await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(iv) }, wrappingKey, new Uint8Array(data));
+        };
 
-        const decryptedStore = await crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(iv) }, wrappingKey, new Uint8Array(data));
+        let decryptedStore;
+        try {
+            decryptedStore = await decryptWithMaterial(getKeyStoreMaterial());
+        } catch (e) {
+            decryptedStore = await decryptWithMaterial('null');
+            await storeEncryptedKeys(JSON.parse(new TextDecoder().decode(decryptedStore)));
+        }
         const exportableKeys = JSON.parse(new TextDecoder().decode(decryptedStore));
 
         for (const [peerIdStr, dataObj] of Object.entries(exportableKeys)) {

@@ -86,6 +86,7 @@ exports.handleLogin = (ws, packet, clients, db, setMyIdCallback) => {
 function completeLogin(ws, packet, clients, db, setMyIdCallback, row, sessionToken) {
     const myId = row.id;
     setMyIdCallback(myId);
+    ws.authenticatedId = myId;
     clients.set(myId, ws);
     console.log(`[Server] Web Client ID ${myId} logged in`);
 

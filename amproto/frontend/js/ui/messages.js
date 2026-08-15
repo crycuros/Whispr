@@ -354,7 +354,7 @@ function startTimerTicker() {
                 chat.messages = chat.messages.filter(m => m.id !== msg.id);
                 if (msg.type === 'received') {
                     import('../core/amproto.js').then(AMP => {
-                        const packet = AMP.buildPacket(AMP.CMD_MSG_DELETE, 0, state.myId, JSON.stringify({ msgId: msg.id, isGroup: chat.isGroup, groupId: chat.groupId }));
+                        const packet = AMP.buildPacket(AMP.CMD_MSG_DELETE, chat.isGroup ? 0 : peerId, state.myId, JSON.stringify({ msgId: msg.messageId || msg.id, isGroup: chat.isGroup, groupId: chat.groupId }));
                         if (state.ws) state.ws.send(AMP.obfuscate(packet));
                     });
                 }
@@ -601,7 +601,7 @@ function setupMessageContextMenu() {
                     if (state.currentActiveChat === peerId) renderMessages(peerId);
                     import('../core/app.js').then(a => a.persistKeys && a.persistKeys());
                     import('../core/amproto.js').then(AMP => {
-                        const packet = AMP.buildPacket(AMP.CMD_MSG_DELETE, chat.isGroup ? 0 : peerId, state.myId, JSON.stringify({ msgId: msg.id, isGroup: chat.isGroup, groupId: chat.groupId }));
+                        const packet = AMP.buildPacket(AMP.CMD_MSG_DELETE, chat.isGroup ? 0 : peerId, state.myId, JSON.stringify({ msgId: msg.messageId || msg.id, isGroup: chat.isGroup, groupId: chat.groupId }));
                         if (state.ws) state.ws.send(AMP.obfuscate(packet));
                     });
                 }
@@ -1043,7 +1043,7 @@ export function setupMessageUI() {
             renderChatList();
             
             const encryptedPayload = await encryptPayload(chat.sharedSecretKey, JSON.stringify(payloadObj));
-            const encPacket = buildPacket(CMD_ENC_MSG, state.currentActiveChat, state.myId, JSON.stringify(encryptedPayload));
+            const encPacket = buildPacket(CMD_ENC_MSG, state.currentActiveChat, state.myId, JSON.stringify({ clientMsgId: localId, ...encryptedPayload }));
             if (state.ws) state.ws.send(obfuscate(encPacket));
         }
     };
@@ -1057,12 +1057,8 @@ export function setupMessageUI() {
     };
 
     async function uploadVoiceMessage(blob, duration, chat) {
-        const buffer = await blob.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-        if (bytes.length > 44000) {
-            alert('Voice message is too long to send.');
-            return;
-        }
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        const VOICE_MAX_ENV_BYTES = 192 * 1024;
         const key = chat.isGroup ? chat.groupKey : chat.sharedSecretKey;
         let env;
         try {
@@ -1072,7 +1068,7 @@ export function setupMessageUI() {
             return;
         }
         const encData = bytesToBase64(new Uint8Array(new TextEncoder().encode(JSON.stringify(env))));
-        if (encData.length > 60000) {
+        if (atob(encData).length > VOICE_MAX_ENV_BYTES) {
             alert('Voice message is too long to send.');
             return;
         }

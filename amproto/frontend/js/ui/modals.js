@@ -163,6 +163,7 @@ export function setupModals() {
             if (state.myAvatarUrl) {
                 avatarPicker.innerHTML = `<img src="${state.myAvatarUrl}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
             }
+            pendingSettingsAvatar = null;
             
             settingsPanel.classList.add('active');
         });
@@ -205,16 +206,16 @@ export function setupModals() {
         });
     });
 
+    let pendingSettingsAvatar = null;
     setupImagePicker('settings-avatar-picker', (croppedB64) => {
-        state.pendingSpaceAvatar = croppedB64; 
+        pendingSettingsAvatar = croppedB64;
     });
 
     document.getElementById('btn-save-profile').addEventListener('click', () => {
         const bio = document.getElementById('settings-bio').value;
-        const updatePacket = buildPacket(CMD_USER_UPDATE, 0, state.myId, JSON.stringify({
-            avatarUrl: state.pendingSpaceAvatar,
-            bio: bio
-        }));
+        const updatePayload = { bio };
+        if (pendingSettingsAvatar) updatePayload.avatarUrl = pendingSettingsAvatar;
+        const updatePacket = buildPacket(CMD_USER_UPDATE, 0, state.myId, JSON.stringify(updatePayload));
         if (state.ws) state.ws.send(obfuscate(updatePacket));
         
         settingsPanel.classList.remove('active');

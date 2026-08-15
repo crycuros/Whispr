@@ -7,6 +7,12 @@ exports.handleEncMsg = (ws, packet, rawData, clients, db) => {
     const senderId = packet.senderId;
     const payloadStr = packet.payloadString;
 
+    let clientMsgId = null;
+    try {
+        const parsed = JSON.parse(payloadStr);
+        if (parsed && typeof parsed.clientMsgId === 'string') clientMsgId = parsed.clientMsgId;
+    } catch (e) { /* not JSON, ignore */ }
+
     friendsController.canMessage(db, senderId, targetId, (allowed) => {
         if (!allowed) {
             const AMProto = require('../core/amproto');
@@ -15,8 +21,8 @@ exports.handleEncMsg = (ws, packet, rawData, clients, db) => {
             return;
         }
 
-        db.run(`INSERT INTO messages (sender_id, receiver_id, payload, is_read, sent_at) VALUES (?, ?, ?, ?, ?)`, 
-            [senderId, targetId, payloadStr, clients.has(targetId) ? 1 : 0, Date.now()], 
+        db.run(`INSERT INTO messages (sender_id, receiver_id, payload, is_read, sent_at, client_msg_id) VALUES (?, ?, ?, ?, ?, ?)`, 
+            [senderId, targetId, payloadStr, clients.has(targetId) ? 1 : 0, Date.now(), clientMsgId], 
             function(err) {
                 if (err) console.error("Error saving message", err);
             }
@@ -56,7 +62,7 @@ exports.handleMsgDelete = (ws, packet, rawData, clients, db) => {
             });
         });
     } else {
-        db.run(`DELETE FROM messages WHERE (sender_id = ? OR receiver_id = ?) AND payload LIKE ?`, [senderId, senderId, `%${msgId}%`], (err) => {
+        db.run(`DELETE FROM messages WHERE (sender_id = ? OR receiver_id = ?) AND client_msg_id = ?`, [senderId, senderId, msgId], (err) => {
             if (err) console.error("Error deleting message:", err);
         });
 

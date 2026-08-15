@@ -2,7 +2,8 @@ const AMProto = require('../core/amproto');
 
 // Voice clips are E2E-encrypted by the client before upload, so the
 // server only ever stores ciphertext and never holds decryption keys.
-const MAX_CLIP_BYTES = 48 * 1024;
+// 192KB of ciphertext comfortably fits a 15s opus clip (~90KB) plus overhead.
+const MAX_CLIP_BYTES = 192 * 1024;
 
 exports.handleVoiceUpload = (ws, packet, db) => {
     try {

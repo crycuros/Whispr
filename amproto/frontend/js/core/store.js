@@ -1,7 +1,6 @@
 export const state = {
     myId: null,
     myUsername: null,
-    myPasswordHash: null,
     myAvatarUrl: null,
     myBio: '',
     myPreferences: {},
