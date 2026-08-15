@@ -331,6 +331,42 @@ export function appendMessage(peerId, msg) {
     container.scrollTop = container.scrollHeight;
 }
 
+let timerTickerInterval = null;
+
+function startTimerTicker() {
+    if (timerTickerInterval) return;
+    timerTickerInterval = setInterval(() => {
+        const peerId = state.currentActiveChat;
+        if (!peerId) return;
+        const chat = state.chats.get(peerId);
+        if (!chat) return;
+
+        let needRender = false;
+        for (const msg of chat.messages) {
+            if (!msg.timer || msg.timer <= 0 || !msg.readTime) continue;
+            const timeLeft = Math.max(0, msg.readTime + (msg.timer * 1000) - Date.now());
+            if (timeLeft === 0) {
+                chat.messages = chat.messages.filter(m => m.id !== msg.id);
+                if (msg.type === 'received') {
+                    import('../core/amproto.js').then(AMP => {
+                        const packet = AMP.buildPacket(AMP.CMD_MSG_DELETE, 0, state.myId, JSON.stringify({ msgId: msg.id, isGroup: chat.isGroup, groupId: chat.groupId }));
+                        if (state.ws) state.ws.send(AMP.obfuscate(packet));
+                    });
+                }
+                import('../core/app.js').then(a => a.persistKeys && a.persistKeys());
+                needRender = true;
+            } else {
+                const badge = document.querySelector(`.timer-badge[data-msg-id="${msg.id}"]`);
+                if (badge) {
+                    const text = `${Math.ceil(timeLeft / 1000)}s left`;
+                    if (badge.textContent !== text) badge.textContent = text;
+                }
+            }
+        }
+        if (needRender && state.currentActiveChat === peerId) renderMessages(peerId);
+    }, 500);
+}
+
 function buildMessageElement(msg, chat, peerId) {
         const payloadObj = (msg.text && msg.text.startsWith('{')) ? (() => { try { return JSON.parse(msg.text); } catch(e) { return null; } })() : null;
         const isPoll = payloadObj && payloadObj.type === 'poll';
@@ -401,32 +437,9 @@ function buildMessageElement(msg, chat, peerId) {
             }
             
             const timeLeft = Math.max(0, msg.readTime + (msg.timer * 1000) - Date.now());
-            if (timeLeft === 0) {
-                setTimeout(() => {
-                    chat.messages = chat.messages.filter(m => m.id !== msg.id);
-                    if (msg.type === 'received') {
-                        import('../core/amproto.js').then(AMP => {
-                            const packet = AMP.buildPacket(AMP.CMD_MSG_DELETE, 0, state.myId, JSON.stringify({ msgId: msg.id, isGroup: chat.isGroup, groupId: chat.groupId }));
-                            if (state.ws) state.ws.send(AMP.obfuscate(packet));
-                        });
-                    }
-                    import('../core/app.js').then(a => a.persistKeys && a.persistKeys());
-                    renderMessages(peerId);
-                }, 0);
-                return null;
-            }
-            
-            const timerBadge = `<span style="font-size: 10px; background: rgba(0,0,0,0.5); color: white; padding: 2px 6px; border-radius: 12px; margin-left: 8px;">${Math.ceil(timeLeft/1000)}s left</span>`;
+            const timerBadge = `<span class="timer-badge" data-msg-id="${msg.id}" style="font-size: 10px; background: rgba(0,0,0,0.5); color: white; padding: 2px 6px; border-radius: 12px; margin-left: 8px;">${Math.ceil(timeLeft/1000)}s left</span>`;
             wrapper.querySelector('.bubble').innerHTML += timerBadge;
-            
-            if (!window.activeTimers) window.activeTimers = new Set();
-            if (!window.activeTimers.has(msg.id)) {
-                window.activeTimers.add(msg.id);
-                setTimeout(() => {
-                    window.activeTimers.delete(msg.id);
-                    if (state.currentActiveChat === peerId) renderMessages(peerId);
-                }, 1000);
-            }
+            startTimerTicker();
         }
 
         if (msg.id) {
