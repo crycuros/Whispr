@@ -516,22 +516,46 @@
 
     <!-- QUICK DRAW MODAL -->
     <div class="modal-overlay" id="draw-modal" style="display: none; z-index: 20000;">
-        <div class="modal" style="max-width: 90cqw; width: auto; text-align: center; background: var(--bg-primary);">
-            <h3 style="margin-top: 0;">Quick Draw</h3>
-            <div style="background: white; border-radius: 8px; margin-bottom: 16px; overflow: hidden; border: 2px solid var(--border);">
-                <canvas id="draw-canvas" width="400" height="300" style="display: block; cursor: crosshair; touch-action: none; width: 100%; max-width: 400px; height: auto;"></canvas>
+        <div class="modal draw-modal-box" style="max-width: 480px; width: 92%; text-align: center; background: var(--bg-primary);">
+            <div class="draw-header">
+                <div class="draw-header-title">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path><circle cx="11" cy="11" r="2"></circle></svg>
+                    <h3 style="margin: 0;">Quick Draw</h3>
+                </div>
+                <button type="button" class="draw-close-btn" id="btn-draw-close" title="Close">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
             </div>
-            <div style="display: flex; gap: 8px; justify-content: center; margin-bottom: 16px;">
-                <button class="color-swatch" style="background: #000; width: 24px; height: 24px;" data-draw-color="#000"></button>
-                <button class="color-swatch" style="background: #f43f5e; width: 24px; height: 24px;" data-draw-color="#f43f5e"></button>
-                <button class="color-swatch" style="background: #3b82f6; width: 24px; height: 24px;" data-draw-color="#3b82f6"></button>
-                <button class="color-swatch" style="background: #10b981; width: 24px; height: 24px;" data-draw-color="#10b981"></button>
-                <button class="color-swatch" style="background: #facc15; width: 24px; height: 24px;" data-draw-color="#facc15"></button>
-                <button class="btn-secondary" id="btn-draw-clear" style="padding: 4px 8px; font-size: 12px; margin-left: auto;">Clear</button>
+            <div class="draw-canvas-wrap">
+                <canvas id="draw-canvas" width="400" height="300"></canvas>
             </div>
-            <div class="modal-actions" style="display: flex; justify-content: center; gap: 16px;">
+            <div class="draw-toolbar">
+                <div class="color-swatches" id="draw-colors">
+                    <button type="button" class="color-swatch active" style="background: #000;" data-draw-color="#000" title="Black"></button>
+                    <button type="button" class="color-swatch" style="background: #f43f5e;" data-draw-color="#f43f5e" title="Red"></button>
+                    <button type="button" class="color-swatch" style="background: #3b82f6;" data-draw-color="#3b82f6" title="Blue"></button>
+                    <button type="button" class="color-swatch" style="background: #10b981;" data-draw-color="#10b981" title="Green"></button>
+                    <button type="button" class="color-swatch" style="background: #facc15;" data-draw-color="#facc15" title="Yellow"></button>
+                    <button type="button" class="color-swatch" style="background: #8b5cf6;" data-draw-color="#8b5cf6" title="Purple"></button>
+                    <button type="button" class="color-swatch" style="background: #ffffff; border: 1px solid var(--border);" data-draw-color="#ffffff" title="White"></button>
+                </div>
+                <div class="draw-divider"></div>
+                <div class="draw-sizes">
+                    <button type="button" class="size-btn" data-size="3">S</button>
+                    <button type="button" class="size-btn active" data-size="6">M</button>
+                    <button type="button" class="size-btn" data-size="12">L</button>
+                </div>
+                <div class="draw-divider"></div>
+                <button type="button" class="draw-tool-btn" id="btn-draw-undo" title="Undo">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                </button>
+                <button type="button" class="draw-tool-btn" id="btn-draw-clear" title="Clear">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+            </div>
+            <div class="modal-actions" style="display: flex; justify-content: center; gap: 12px; margin-top: 16px;">
                 <button class="btn-secondary" id="btn-draw-cancel">Cancel</button>
-                <button class="btn-primary" id="btn-draw-send">Send Drawing</button>
+                <button class="btn-primary" id="btn-draw-send" disabled>Send Drawing</button>
             </div>
         </div>
     </div>

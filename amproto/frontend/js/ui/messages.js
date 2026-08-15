@@ -778,6 +778,45 @@ export function setupMessageUI() {
     const drawCanvas = document.getElementById('draw-canvas');
     let ctx, isDrawing = false;
     let currentColor = '#000';
+    let currentSize = 6;
+    let strokes = [];
+    let currentStroke = null;
+
+    const updateDrawActions = () => {
+        const btnSend = document.getElementById('btn-draw-send');
+        const btnUndo = document.getElementById('btn-draw-undo');
+        const btnClear = document.getElementById('btn-draw-clear');
+        const hasStrokes = strokes.length > 0;
+        if (btnSend) btnSend.disabled = !hasStrokes;
+        if (btnUndo) btnUndo.disabled = !hasStrokes;
+        if (btnClear) btnClear.disabled = !hasStrokes;
+    };
+
+    const redrawDraw = () => {
+        if (!ctx) return;
+        ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        for (const st of strokes) {
+            ctx.beginPath();
+            ctx.strokeStyle = st.color;
+            ctx.lineWidth = st.size;
+            if (st.points.length === 1) {
+                ctx.arc(st.points[0].x, st.points[0].y, st.size / 2, 0, Math.PI * 2);
+                ctx.fillStyle = st.color;
+                ctx.fill();
+            } else {
+                ctx.moveTo(st.points[0].x, st.points[0].y);
+                for (let i = 1; i < st.points.length; i++) ctx.lineTo(st.points[i].x, st.points[i].y);
+                ctx.stroke();
+            }
+        }
+    };
+
+    const resetDraw = () => {
+        strokes = [];
+        currentStroke = null;
+        redrawDraw();
+        updateDrawActions();
+    };
 
     const backToList = document.getElementById('btn-back-to-list');
     if (backToList) {
@@ -822,55 +861,92 @@ export function setupMessageUI() {
         ctx = drawCanvas.getContext('2d');
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
-        ctx.lineWidth = 4;
-        
-        const startDraw = (e) => {
-            isDrawing = true;
-            ctx.beginPath();
+
+        const toDrawCoords = (e) => {
             const rect = drawCanvas.getBoundingClientRect();
             const sx = drawCanvas.width / rect.width;
             const sy = drawCanvas.height / rect.height;
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            ctx.moveTo((clientX - rect.left) * sx, (clientY - rect.top) * sy);
+            return { x: (clientX - rect.left) * sx, y: (clientY - rect.top) * sy };
+        };
+
+        const startDraw = (e) => {
+            e.preventDefault();
+            isDrawing = true;
+            currentStroke = { color: currentColor, size: currentSize, points: [toDrawCoords(e)] };
         };
         const draw = (e) => {
             if (!isDrawing) return;
             e.preventDefault();
-            const rect = drawCanvas.getBoundingClientRect();
-            const sx = drawCanvas.width / rect.width;
-            const sy = drawCanvas.height / rect.height;
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            ctx.strokeStyle = currentColor;
-            ctx.lineTo((clientX - rect.left) * sx, (clientY - rect.top) * sy);
+            const p = toDrawCoords(e);
+            currentStroke.points.push(p);
+            ctx.beginPath();
+            ctx.strokeStyle = currentStroke.color;
+            ctx.lineWidth = currentStroke.size;
+            const prev = currentStroke.points[currentStroke.points.length - 2];
+            ctx.moveTo(prev.x, prev.y);
+            ctx.lineTo(p.x, p.y);
             ctx.stroke();
         };
-        const endDraw = () => { isDrawing = false; ctx.closePath(); };
-        
+        const endDraw = () => {
+            if (!isDrawing) return;
+            isDrawing = false;
+            if (currentStroke && currentStroke.points.length) {
+                strokes.push(currentStroke);
+                currentStroke = null;
+                updateDrawActions();
+            }
+        };
+
         drawCanvas.addEventListener('mousedown', startDraw);
         drawCanvas.addEventListener('mousemove', draw);
         window.addEventListener('mouseup', endDraw);
         drawCanvas.addEventListener('touchstart', startDraw, {passive: false});
         drawCanvas.addEventListener('touchmove', draw, {passive: false});
         window.addEventListener('touchend', endDraw);
-        
+
         document.querySelectorAll('#draw-modal .color-swatch').forEach(btn => {
-            btn.onclick = () => currentColor = btn.dataset.drawColor;
+            btn.onclick = () => {
+                currentColor = btn.dataset.drawColor;
+                document.querySelectorAll('#draw-modal .color-swatch').forEach(b => b.classList.toggle('active', b === btn));
+            };
         });
-        document.getElementById('btn-draw-clear').onclick = () => {
-            ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-        };
+
+        document.querySelectorAll('#draw-modal .size-btn').forEach(btn => {
+            btn.onclick = () => {
+                currentSize = parseInt(btn.dataset.size, 10);
+                document.querySelectorAll('#draw-modal .size-btn').forEach(b => b.classList.toggle('active', b === btn));
+            };
+        });
+
+        const btnUndo = document.getElementById('btn-draw-undo');
+        if (btnUndo) btnUndo.onclick = () => { strokes.pop(); redrawDraw(); updateDrawActions(); };
+
+        const btnClear = document.getElementById('btn-draw-clear');
+        if (btnClear) btnClear.onclick = resetDraw;
+
+        updateDrawActions();
     }
+
+    const closeDrawModal = () => { drawModal.style.display = 'none'; };
 
     document.getElementById('btn-draw').onclick = () => {
         if (!state.currentActiveChat) return;
         const chat = state.chats.get(state.currentActiveChat);
         if (!chat.isSecure && !chat.isGroup) return;
-        if (ctx) ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        resetDraw();
         drawModal.style.display = 'flex';
     };
-    document.getElementById('btn-draw-cancel').onclick = () => drawModal.style.display = 'none';
+    document.getElementById('btn-draw-cancel').onclick = closeDrawModal;
+    const btnDrawClose = document.getElementById('btn-draw-close');
+    if (btnDrawClose) btnDrawClose.onclick = closeDrawModal;
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && drawModal.style.display === 'flex') closeDrawModal();
+    });
+    drawModal.addEventListener('click', (e) => {
+        if (e.target === drawModal) closeDrawModal();
+    });
     
     const sendMessageData = async (payloadObj) => {
         const chat = state.chats.get(state.currentActiveChat);

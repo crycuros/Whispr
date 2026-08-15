@@ -1234,6 +1234,114 @@ input { font-family: inherit; }
 }
 .timer-select-item:hover { background: var(--bg-secondary); }
 .timer-select-item.active { background: color-mix(in srgb, var(--accent) 18%, transparent); font-weight: 600; }
+
+/* ===== Quick Draw modal ===== */
+.draw-modal-box { padding: 20px 20px 22px; border-radius: 18px; animation: slideIn 0.2s ease-out; }
+.draw-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+.draw-header-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-primary);
+}
+.draw-header-title svg { color: var(--accent); }
+.draw-header-title h3 { font-size: 16px; font-weight: 600; }
+.draw-close-btn {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.draw-close-btn:hover { background: var(--bg-secondary); color: var(--text-primary); }
+.draw-canvas-wrap {
+    background: #ffffff;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 14px;
+    box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+#draw-canvas {
+    display: block;
+    width: 100%;
+    max-width: 400px;
+    height: auto;
+    margin: 0 auto;
+    cursor: crosshair;
+    touch-action: none;
+}
+.draw-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    padding: 8px 10px;
+}
+.color-swatches { display: flex; align-items: center; gap: 6px; }
+.color-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.color-swatch:hover { transform: scale(1.15); }
+.color-swatch.active { box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 3.5px var(--accent); }
+.draw-divider { width: 1px; height: 22px; background: var(--border); }
+.draw-sizes { display: flex; align-items: center; gap: 4px; }
+.size-btn {
+    min-width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.size-btn:hover { background: var(--bg-primary); }
+.size-btn.active { background: var(--accent); color: #1A1A1A; }
+.draw-tool-btn {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.draw-tool-btn:hover { background: var(--bg-primary); color: var(--text-primary); }
+.draw-tool-btn:disabled { opacity: 0.35; cursor: default; }
+.btn-primary:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+}
+.btn-primary:disabled:hover { background: var(--accent); }
 #btn-send {
     width: clamp(34px, 3cqw, 44px);
     height: clamp(34px, 3cqw, 44px);

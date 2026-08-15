@@ -32,7 +32,7 @@ export function setupModals() {
     const btnSettings = document.getElementById('btn-settings');
     const btnBackSettings = document.getElementById('btn-back-settings');
     const btnLogout = document.getElementById('btn-settings-logout');
-    const colorSwatches = document.querySelectorAll('.color-swatch');
+    const colorSwatches = document.querySelectorAll('.color-swatch[data-color]');
 
     const prefTheme = document.getElementById('pref-theme');
     const prefDisplay = document.getElementById('pref-display');
@@ -370,7 +370,7 @@ export function applyThemeColor(color) {
     document.documentElement.style.setProperty('--accent-hover', color + 'dd');
     localStorage.setItem('whispr_accent_color', color);
     
-    document.querySelectorAll('.color-swatch').forEach(s => {
+    document.querySelectorAll('.color-swatch[data-color]').forEach(s => {
         s.classList.toggle('active', s.dataset.color === color);
     });
 }
