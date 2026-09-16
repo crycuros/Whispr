@@ -93,7 +93,7 @@ namespace WhisprDesktop
     public class StorageHelper
     {
         private const string FilePath = "whispr_keys.enc";
-        private static byte[] _wrappingKey;
+        private static byte[]? _wrappingKey;
 
         public static void SetWrappingKey(string password)
         {
@@ -115,13 +115,26 @@ namespace WhisprDesktop
             {
                 aes.Encrypt(iv, plaintext, ciphertext, tag);
             }
+
             // Store as IV(12) + ciphertext + tag(16)
-            var blob = new byte[12 + ciphertext.Length + 16];
-            Buffer.BlockCopy(iv, 0, blob, 0, 12);
-            Buffer.BlockCopy(ciphertext, 0, blob, 12, ciphertext.Length);
-            Buffer.BlockCopy(tag, 0, blob, 12 + ciphertext.Length, 16);
+            var rawBlob = new byte[12 + ciphertext.Length + 16];
+            Buffer.BlockCopy(iv, 0, rawBlob, 0, 12);
+            Buffer.BlockCopy(ciphertext, 0, rawBlob, 12, ciphertext.Length);
+            Buffer.BlockCopy(tag, 0, rawBlob, 12 + ciphertext.Length, 16);
+
+            byte[] finalBlob;
+            try
+            {
+                // Protect using Windows DPAPI (Current User) as an extra layer of defence
+                finalBlob = ProtectedData.Protect(rawBlob, null, DataProtectionScope.CurrentUser);
+            }
+            catch
+            {
+                // Fallback to AES-GCM encrypted raw blob if DPAPI is unavailable
+                finalBlob = rawBlob;
+            }
             
-            await File.WriteAllBytesAsync(FilePath, blob);
+            await File.WriteAllBytesAsync(FilePath, finalBlob);
         }
 
         public static async Task<Dictionary<string, ChatData>> LoadChatsAsync()
@@ -131,8 +144,21 @@ namespace WhisprDesktop
             
             try 
             {
-                var blob = await File.ReadAllBytesAsync(FilePath);
-                var decrypted = CryptoHelper.DecryptAESGCM(blob, _wrappingKey);
+                var fileBytes = await File.ReadAllBytesAsync(FilePath);
+                byte[] rawBlob;
+                
+                try
+                {
+                    // Try unprotecting DPAPI first
+                    rawBlob = ProtectedData.Unprotect(fileBytes, null, DataProtectionScope.CurrentUser);
+                }
+                catch
+                {
+                    // If not DPAPI-protected (legacy format), use directly
+                    rawBlob = fileBytes;
+                }
+
+                var decrypted = CryptoHelper.DecryptAESGCM(rawBlob, _wrappingKey);
                 var json = System.Text.Encoding.UTF8.GetString(decrypted);
                 
                 return JsonSerializer.Deserialize<Dictionary<string, ChatData>>(json) ?? new Dictionary<string, ChatData>();
